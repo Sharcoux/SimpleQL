@@ -1,0 +1,41 @@
+{
+  "name": "simpleql",
+  "version": "1.0.0",
+  "description": "A node framework to manage your backend and your database with the least possible amount of code.",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "./test.js"
+  },
+  "engines": {
+    "node": ">=0.10.12"
+  },
+  "engineStrict": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sharcoux/SimpleQL.git"
+  },
+  "keywords": [
+    "node",
+    "backend",
+    "server",
+    "database"
+  ],
+  "author": "fbillioud",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/Sharcoux/SimpleQL/issues"
+  },
+  "homepage": "https://github.com/Sharcoux/SimpleQL#readme",
+  "optionalDependencies": {
+    "mysql": "^2.16.0"
+  },
+  "devDependencies": {
+    "axios": "^0.18.0",
+    "eslint": "^5.9.0"
+  },
+  "dependencies": {
+    "body-parser": "^1.18.3",
+    "express": "^4.16.4",
+    "jsonwebtoken": "^8.4.0"
+  }
+}
