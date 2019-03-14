@@ -33,6 +33,7 @@ function createServer({port = 443, login = {login: 'email', password: 'password'
           app.use(errorHandler);
           app.all('/', simpleQL(db));
           app.use(jwtOnCreation);
+          app.use(sendResults);
         })
         .then(() => console.log('\x1b[32m%s\x1b[0m', 'Simple QL server ready!'));
     });
@@ -41,10 +42,12 @@ function createServer({port = 443, login = {login: 'email', password: 'password'
 /** The middleware in charge of treating simpleQL requests */
 function simpleQL(db) {
   return (req, res, next) => {
+    //Request already handled
+    if(res.locals.results) return next();
     const authId = req.authId;
     //We forward the request to the database
     db.request(authId, req.body).then(results => {
-      res.json(results);
+      res.locals.results = results;
       next();
     }).catch(err => {
       switch(err.type) {
@@ -75,8 +78,13 @@ function simpleQL(db) {
     });
   };
 }
-var errorHandler = function(err, req, res, next){//eslint-disable-line no-unused-vars
-  console.log(err);
+function errorHandler(err, req, res, next){//eslint-disable-line no-unused-vars
+  console.error(err);
   res.writeHead(500);
   res.end('Broken');
-};
+}
+
+function sendResults(req, res, next) {
+  res.json(res.locals.results);
+  next();
+}

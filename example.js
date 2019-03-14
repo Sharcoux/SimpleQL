@@ -1,11 +1,12 @@
 // import createDatabase, { is, request, or, member, none } from 'simple-ql';
-const { createServer, is, request, or, member, none } = require('./src/index');
+const { createServer, is, request, or, member, none, all, not, and } = require('./src/index');
 
 // First, just focus on the structure of your data. Describe your table architecture
 var User = {
   pseudo: 'string/25',
   email: 'string/40',
   password: 'binary/64',
+  salt: 'binary/16',
   contacts: [User],
   index: {
     email: 'unique/8',
@@ -48,17 +49,18 @@ const database = {
   privateKey: 'key',        // a private key that will be used to identify requests that can ignore access rules
   host : 'localhost',       // the database server host
   database: 'simpleql',     // the name of your database
-  create : false,            // we require to create the database
+  create : true,            // we require to create the database
 };
 
 const login = {
   login: 'email',
   password: 'password',
-  salt: null,
+  salt: 'salt',
   userTable: 'User',
 };
 
-/** You can always create your own rules. The parameters are described in the documentation. */
+// You can always create your own rules. The parameters are described in the documentation.
+/** Ensure that only the feed's participants can read the message content */
 const customRule = ({authId, tableRequest, driver}) => driver.request(database.privateKey, {
   Feed: {
     comments: {
@@ -83,7 +85,13 @@ const rules = {
     password : {
       read : none,          //no one can read the password
     },
-    create : none,          //Creation is handled by login middleware. No one should create Users from request.
+    contacts : {
+      create : and(
+        is('self'),                   //Only ourself can add contacts
+        request(not(is('contacts')))  //Cannot add oneself as our own contact
+      ), 
+    },
+    create : all,           //Creation is handled by login middleware. No one should create Users from request.
     delete : is('self'),    //Users can only delete their own profile
     write : is('self'),     //Users can only edit their own profile
     read : or(is('self'), member('contacts')), //Users and their contacts can read the profile data

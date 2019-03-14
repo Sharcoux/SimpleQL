@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const check = require('./utils/type-checking');
+const { login : loginModel , dbColumn } = require('./utils/types');
 
 const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
   modulusLength: 4096,
@@ -10,8 +12,6 @@ const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
   privateKeyEncoding: {
     type: 'pkcs8',
     format: 'pem',
-    cipher: 'aes-256-cbc',
-    passphrase: 'top secret'
   }
 });
 
@@ -20,17 +20,18 @@ const algoJWT = 'RS256';
 function checkType(field, table, expectedType, minSize, tableName) {
   let data = table[field];
   if(Object(data) instanceof String) {
-    const [type, length] = table[field].split('/');
-    data = { type, length };
+    const [type, l] = table[field].split('/');
+    data = { type, length : parseInt(l, 10) };
   }
   if(!data || data.type!==expectedType) throw new Error(`${tableName} should contain a field ${field} of type ${expectedType}`);
+  check(dbColumn, data);
   if(!data.length || parseInt(data.length, 10)<minSize) throw new Error(`${data} in ${tableName} should have a length of a at least ${minSize}`);
   return true;
 }
 
 function createJWT(id) {
   return new Promise((resolve, reject) => {
-    jwt.sign({id}, privateKey, { algorithm: algoJWT, expiresIn: '2h'}, (err, token) => {
+    jwt.sign({id: id+''}, privateKey, { algorithm: algoJWT, expiresIn: '2h'}, (err, token) => {
       if(err) reject(err);
       resolve(token);
     });
@@ -50,13 +51,13 @@ function createHash(password, salt) {
   return new Promise((resolve, reject) => {
     crypto.pbkdf2(password, salt || '', 1000, 64, 'sha512', (err, hash) => {
       if(err) reject(err);
-      resolve(hash.toString('UTF8'));
+      resolve(hash);
     });
   });
 }
 
 function createLocalLogin({login = 'email', password = 'password', salt = 'salt', userTable = 'User'}) {
-
+  check(loginModel, {login, password, salt, userTable});
   return (tables, database) => {
     //Validate data
     const table = tables[userTable];
@@ -64,7 +65,7 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
     try {
       checkType(login, table, 'string', 1, userTable);
       checkType(password, table, 'binary', 64, userTable);
-      if(salt) checkType(salt, table, 'string', 16, userTable);
+      if(salt) checkType(salt, table, 'binary', 16, userTable);
     } catch(err) {
       Promise.reject(err);
     }
@@ -73,9 +74,11 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
     return Promise.resolve({
       /** This middleware will intercept connections with login/password and users creation */
       loginMiddleware(req, res, next) {
+        const token = req.headers && req.headers.authorization && req.headers.authorization.split(' ')[1];
         const body = req.body;
         const {[login]: log, [password]: pass} = body;
         if(log && pass) {
+          console.log(log, 'is trying to log in');
           //Someone is trying to log in. We retrieve their data
           const search = [password, 'reservedId'];
           if(salt) search.push(salt);//We might need the salt if required
@@ -84,7 +87,7 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
             search,
             where: { [login] : log },
           }).then(results => {
-            console.log(results);
+            console.log('users matching login details', results);
             //No user with this login
             if(results.length===0) {
               res.writeHead(404);
@@ -93,14 +96,16 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
             
             //We compare the password provided with the hash in the database
             const { reservedId, password: hashedPass, salt: saltString } = results[0];
-            return createHash(pass, saltString).then(hash => {
+            return createHash(pass, saltString.toString('hex')).then(hash => {
               //If the log fails
-              if(hash!==hashedPass) {
+              if(hash.equals(hashedPass)) {
+                //If the log succeeds, we return a jwt token
+                return createJWT(reservedId)
+                  .then(jwt => res.locals.results = {...body, jwt})
+                  .then(() => next());
+              } else {
                 res.writeHead(401);
                 return res.end(`Wrong password provided for user ${log}`);
-              } else {
-                //If the log succeeds, we return a jwt token
-                return createJWT(reservedId).then(() => next());
               }
             }).catch(err => {
               console.error(err);
@@ -113,6 +118,7 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
           //Someone is trying to register. We will hash the pwd and add a salt string if required
           function register(request) {
             const { [login]: log, [password]: pass } = request;
+            console.log(log, 'is being created');
             //Missing login or password
             if(!log || !pass) {
               res.writeHead(400);
@@ -124,33 +130,38 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
               return res.end(`${login} and ${password} are required to be of type String in ${userTable}, but we received ${log} and ${pass}`);
             }
             // creating a unique salt for a particular user 
-            const saltString = salt ? crypto.randomBytes(16).toString('UTF8') : ''; 
+            const saltBinary = salt ? crypto.randomBytes(16) : ''; 
             // hashing user's salt and password with 1000 iterations, 64 length and sha512 digest 
-            return createHash(pass, saltString).then(hash => {
+            return createHash(pass, saltBinary.toString('hex')).then(hash => {
               //Enhance the request
               request[password] = hash;
-              if(salt) request[salt] = saltString;
+              if(salt) request[salt] = saltBinary;
             });
           }
           //We handle multiple simultaneous registration
-          return Promise.all((createReq instanceof Array ? createReq : [createReq]).map(register)).then(() => next()).catch(next);
-        } else if(req.token) {
+          return Promise.all((createReq instanceof Array ? createReq : [createReq]).map(register))
+            .then(() => next())
+            .catch(next);
+        } else if(token) {
           //A request is being authenticated with a JWT token
-          checkJWT(req.token).then(decoded => req.authId = decoded.id).then(() => next()).catch(err => {
-            switch(err.name) {
-              case 'TokenExpiredError':
-              case 'JsonWebTokenError':
-              case 'NotBeforeError': 
-                res.writeHead(401);
-                res.end(err.message);
-                break;
-              default:
-                res.writeHead(500);
-                res.end(err.message);
-                break;
-            }
-            next(err);
-          });
+          checkJWT(token).then(decoded => (req.authId = decoded.id))
+            .then(() => console.log(`User ${req.authId} is making a request.`))
+            .then(() => next())
+            .catch(err => {
+              switch(err.name) {
+                case 'TokenExpiredError':
+                case 'JsonWebTokenError':
+                case 'NotBeforeError': 
+                  res.writeHead(401);
+                  res.end(err.message);
+                  break;
+                default:
+                  res.writeHead(500);
+                  res.end(err.message);
+                  break;
+              }
+              next(err);
+            });
         } else {
           res.writeHead('401');
           return res.end('The request could not be authentified');
@@ -162,7 +173,13 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
         if(body[userTable] && body[userTable].create) {
           //Now that the user id exists, We can provide the user with a jwt for future access
           const createReq = body[userTable].create;
-          return (createReq instanceof Array ? Promise.all(createReq.map(request => createJWT(request[login]))) : createJWT(createReq[login]))
+          return (createReq instanceof Array ?
+            //Simultaneous creations
+            Promise.all(createReq.map(request => createJWT(request[login]).then(jwt => ({ ...request, jwt })))) :
+            //Single user creation
+            createJWT(createReq[login]).then(jwt => ({...createReq, jwt}))
+          )
+            .then(data => (res.locals.results = data))
             .then(() => next()).catch(next);
         } else {
           next();

@@ -1,4 +1,6 @@
 const mysql = require('mysql');
+const { operators } = require('../database');
+const { isPrimitive } = require('../utils');
 
 //Shortcuts for escaping
 /* Escaping values */
@@ -9,6 +11,7 @@ const ei = mysql.escapeId;
 //TODO : format requests results
 class Driver {
   constructor(connection) {
+    this.binaries = [];
     this.connection = connection;
     this.query = this.query.bind(this);
     this.get = this.get.bind(this);
@@ -16,13 +19,14 @@ class Driver {
     this.create = this.create.bind(this);
     this.delete = this.delete.bind(this);
     this.createTable = this.createTable.bind(this);
+    this._escapeValue = this._escapeValue.bind(this);
   }
   query(query) {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(`timeout for requet ${query}`), 3000);
       console.log(`Executing ${query}`);
-      this.connection.query(query+';', function (error, results, fields) {
-        // console.log(results, fields);
+      this.connection.query(query+';', (error, results) => {
+        if(results instanceof Array) console.log('results', results);
         clearTimeout(timeout);
         if (error) reject(error);
         resolve(results);
@@ -46,7 +50,7 @@ class Driver {
   }
   get({table, search, where, offset, limit}) {
     if(!search.length) return Promise.resolve({});
-    let query = createQuery(`SELECT ${search.map(s => es(s)).join(', ')} FROM ${ei(table)}`, where);
+    let query = createQuery(`SELECT ${search.map(s => ei(s)).join(', ')} FROM ${ei(table)}`, where);
     if(offset) query += ` OFFSET ${es(parseInt(offset, 10))}`;
     if(limit) query += ` LIMIT ${es(parseInt(limit, 10))}`;
     return this.query(query);
@@ -57,20 +61,26 @@ class Driver {
   }
   create({table, elements}) {
     if(!elements) return Promise.resolve();
-    const list = !(elements instanceof Array) ? [elements] : elements;
+    const list = elements instanceof Array ? elements : [elements];
     return Promise.all(list.map(element => {
       const query = `INSERT INTO ${ei(table)} (
-        ${Object.keys(element).map(k => es(k)).join(', ')}
+        ${Object.keys(element).map(k => ei(k)).join(', ')}
       ) VALUES (
-        ${Object.values(element).map(v => es(v)).join(', ')}
+        ${Object.keys(element).map(k => this._escapeValue(table, k, element[k])).join(', ')}
       )`;
       return this.query(query);
     }));
   }
+  _escapeValue(table, key, value) {
+    return value===null ? 'NULL'
+      : this.binaries.includes(table+'.'+key)
+        ? `0x${value.toString('hex')}`
+        : es(value);
+  }
   update({table, values, where}) {
     const setQuery = Object.keys(values).map(key => {
       const value = values[key];
-      return `${es(key)}=${value===null ? 'NULL' : es(value)}`;
+      return `${ei(key)}=${this._escapeValue(table, key, value)}`;
     }).join(', ');
     const query = createQuery(`UPDATE TABLE ${ei(table)} SET ${setQuery}`, where);
     return this.query(query);
@@ -83,11 +93,14 @@ class Driver {
         data[name] = { type, length };
       }
       const { type, length, unsigned, nullable, defaultValue, autoIncrement } = data[name];
+      //We record binary columns to not escape their values during INSERT or UPDATE
+      if(type==='binary') this.binaries.push(`${table}.${name}`);
+
       let query = `, ${name} ${convertType(type)}`;
       if(length) query += `(${length})`;
       if(unsigned) query += ' UNSIGNED';
       if(!nullable) query += ' NOT NULL';
-      if(defaultValue) query += ` DEFAULT ${defaultValue === null ? 'NULL' : defaultValue}`;
+      if(defaultValue) query += ` DEFAULT ${this._escapeValue(table, name, defaultValue)}`;
       if(autoIncrement) query += ' AUTO_INCREMENT';
       return query;
     });
@@ -114,7 +127,6 @@ class Driver {
     )`);
   }
   createForeignKeys(foreignKeys = {}) {
-    console.log(foreignKeys);
     return Promise.all(Object.keys(foreignKeys).map(tableName => {
       const keys = Object.keys(foreignKeys[tableName]);
       const query = keys.map(key => `ADD CONSTRAINT FK_${tableName}_${key} FOREIGN KEY (${key}) REFERENCES ${foreignKeys[tableName][key]}(reservedId) ON DELETE CASCADE ON UPDATE CASCADE`).join(',\n       ');
@@ -126,33 +138,47 @@ class Driver {
   }
 }
 
-const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le'];
 function createQuery(base, where) {
   if(!where || !Object.keys(where).length) return base;
   return `${base} WHERE ${convertIntoCondition(where)}`;
 }
 
 function convertIntoCondition(conditions, operator = '=') {
-  function writeCondition(key, value) {
-    if(operators.includes(key)) return convertIntoCondition(conditions[key], key);
-    switch(operator) {
-      case 'ge':
-      case 'gt':
-      case 'le':
-      case 'lt':
-      case 'like':
-        return `${es(key)} ${operator.toUpperCase()} ${es(value)}`;
-      case 'not':
-        return value===null ? `${es(key)} IS NOT NULL` : `${es(key)}!=${es(value)}`;
-      default:
-        return value===null ? `${es(key)} IS NULL` : `${es(key)}=${es(value)}`;
-    }
-  }
   return Object.keys(conditions).map(key => {
-    const value = conditions[key];
-    if(value instanceof Array) return value.map(v => writeCondition(key, v)).join(' AND ');
-    return writeCondition(key, value);
-  }).join(' AND ');
+    function writeValue(value, operator) {
+      switch(operator) {
+        case '>':
+        case '<':
+        case '>=':
+        case '<=':
+        case 'ge':
+        case 'gt':
+        case 'le':
+        case 'lt':
+        case 'like':
+          return `${ei(key)} ${operator.toUpperCase()} ${es(value)}`;
+        case '~':
+          return `${ei(key)} LIKE ${es(value)}`;
+        case '!':
+        case 'not':
+          return value===null ? `${ei(key)} IS NOT NULL` : `${ei(key)}!=${es(value)}`;
+        default:
+          return value===null ? `${ei(key)} IS NULL` : `${ei(key)}=${es(value)}`;
+      }
+    }
+    function writeCondition(value, operator = '=') {
+      if(isPrimitive(value)) return writeValue(value, operator);
+      if(['not', '!'].includes(operator)) return 'NOT ('+writeCondition(value)+')';
+      if(value instanceof Array) return value.map(v => '('+writeCondition(v, operator)).join(' OR ')+')';
+      else if(value instanceof Object) return '('+Object.keys(value).map(k => {
+        if(!operators.includes(k)) throw new Error(`${k} is not a valid constraint for key ${key}`);
+        if(!['not', '!', '='].includes(operator)) throw new Error(`${k} connot be combined with operator ${operator} in key ${key}`);
+        return writeCondition(value[k], k);
+      }).join(' AND ')+')';
+      throw new Error(`Should not be possible. We received this weird value : ${JSON.stringify(value)} which was nor object, nor array, nor primitive.`);
+    }
+    return writeCondition(key, conditions[key], operator).join(' AND ');
+  });
 }
 
 function convertType(type) {
@@ -164,13 +190,13 @@ function convertType(type) {
 
 const lengthRequired = ['string'];
 
-module.exports = ({database = 'simpleql', charset = 'utf8', create = false, connectionLimit = 100, ...parameters}) => {
+module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host = 'localhost', connectionLimit = 100, ...parameters}) => {
   return Promise.resolve().then(() => {
     if(create) {
       //Create an initial connection and driver to create the database
       const connection = mysql.createConnection({...parameters, database});
       return new Promise((resolve, reject) => {
-        connection.connect(function(err) {
+        connection.connect(err => {
           if(err) reject(err);
           else resolve(new Driver(connection));
         });
@@ -186,7 +212,7 @@ module.exports = ({database = 'simpleql', charset = 'utf8', create = false, conn
     }
   })
     //Create connection with pool
-    .then(() => mysql.createPool({...parameters, database, connectionLimit}))
+    .then(() => mysql.createPool({...parameters, database, connectionLimit, host }))
     //Create the driver with the new connection
     .then(pool => new Driver(pool));
 };

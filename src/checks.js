@@ -1,7 +1,9 @@
 /** This file contains functions to check the validity of the parameters provided to simple-ql */
-const { reservedKeys } = require('./database');
+const { reservedKeys, classifyData } = require('./database');
+const check = require('./utils/type-checking');
+const { dbColumn, database } = require('./utils/types');
 
-/** Check that the tables that we are going to create are valid */
+/** Check that the tables that are going to be created are valid */
 function checkTables(tables) {
   const acceptedTypes = ['string', 'integer', 'float', 'double', 'decimal', 'date', 'dateTime', 'boolean', 'text', 'binary'];
   const forbiddenNames = ['login', 'password', 'token'];
@@ -54,9 +56,11 @@ function checkTables(tables) {
       //reference to another table
       if(Object.values(tables).includes(value)) return Promise.resolve();
       //a descriptive object describing the column properties
-      if(!value.hasOwnProperty('type')) return Promise.reject(`${field} in ${tableName} received an invalid object. It should be a string, an array, a descriptive object containing a 'type' property', or one of the tables`);
-      if(value.length && isNaN(value.length)) return Promise.reject(`${field} in ${tableName} is expected to be a number but ê received ${value}`);
-      if(value.unsigned && value.)) return Promise.reject(`${field} in ${tableName} is expected to be a number but ê received ${value}`);
+      try {
+        check(dbColumn, value);
+      } catch(err) {
+        return Promise.reject(`${field} in ${tableName} received an invalid object. It should be a string, an array, a descriptive object containing a 'type' property', or one of the tables. ${err}`);
+      }
       return checkField(tableName, field, value.type);
     } else if(value === undefined) {
       return Promise.reject(`${field} has undefined value in ${tableName}. It should be a string, an array or an object. If you tried to make a self reference or a cross reference between tables, see the documentation.`);
@@ -69,37 +73,44 @@ function checkTables(tables) {
 
 /** Check that the database information are valid */
 function checkDatabase(data) {
-  function check(key, value) {
-    return (value && Object(value) instanceof String)
-      ? Promise.resolve()
-      : Promise.reject(`database.${key} is required to be a string`);
+  try {
+    check(database, data);
+  } catch(err) {
+    throw `The database object provided is incorrect. ${err}`;
   }
-  return Promise.all(['user', 'password', 'host', 'database'].map(key => check(key, data[key])));
 }
 
 /** Check that the rules are valid */
 function checkRules(rules, tables) {
+  function checkRule(value, possibleValues) {
+    return check(possibleValues.reduce((model, key) => {model[key] = 'function'; return model;}, {strict: true}), value);
+  }
   return Promise.all(Object.keys(rules).map(key => {
-    if(!tables[key]) return Promise.reject(`You defined a rule for table ${key} which is not defined.`);
+    const table = tables[key];
+    if(!table) return Promise.reject(`You defined a rule for table ${key} which is not defined.`);
+    const { primitives, objects, arrays } = classifyData(table);
     const rule = rules[key];
-    function check(k, object) {
-      const instructions = ['read', 'write', 'create', 'delete'];
-      if(instructions.includes(k)) {
-        //Ruling objects from this table
-        if(object instanceof Function) return Promise.resolve();
-        if(object instanceof Array && object.length>0 && !object.find(f => !(f instanceof Function))) return Promise.resolve();
-        return Promise.reject(`The field ${k} expect a function or an array of functions but received ${object}`);
-      } else if(Object.keys(tables[key]).includes(k)) {
-        //Ruling one column of the table
-        if(!(object instanceof Object)) return Promise.reject(`We expect an object for field ${k} in ${key} but received ${object}`);
-        return Promise.all(Object.keys(object).map(r => check(r, object[r])));
+    
+    return Promise.all(Object.keys(rule).map(ruleName => {
+      const value = rule[ruleName];
+      if(table[ruleName]) {
+        if(primitives.includes(ruleName)) return checkRule(value, ['read', 'write']);
+        if(objects.includes(ruleName)) return checkRule(value, ['read', 'write']);
+        if(arrays.includes(ruleName)) return checkRule(value, ['add', 'remove']);
+        return Promise.reject(`This should not be possible. The issue occured with the rule ${ruleName} for table ${key}.`);
       } else {
-        //Ruling something that doesn't exist
-        return Promise.reject(`You defined a rule for ${k} which is not defined in the table ${key}`);
+        const instructions = ['read', 'write', 'create', 'delete'];
+        if(!instructions.includes(ruleName)) return Promise.reject(`You defined a rule for ${ruleName} which is not defined in the table ${key}`);
+        if(value instanceof Function) return Promise.resolve();
+        return Promise.reject(`The rule ${ruleName} for table ${key} has to be a function.`);
       }
-    }
-    return Promise.all(Object.keys(rule).map(k => check(k, rule[k])));
-  }));
+    }));
+  }))
+    
+    //Make sure that all tables have access rules
+    .then(() => Promise.all(Object.keys(tables).map(
+      table => rules[table] || Promise.reject(`You need to provide access rules for table ${table}. Please see "Control Access" section in the documentation.`)
+    )));
 }
 
 module.exports = (tables, database, rules) => {
