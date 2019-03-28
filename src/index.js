@@ -71,6 +71,7 @@ function simpleQL(db) {
           break;
         default:
           res.writeHead(500);
+          console.error(err);
           res.end(err);
           break;
       }

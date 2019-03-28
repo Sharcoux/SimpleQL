@@ -1,7 +1,7 @@
 /** This file contains functions to check the validity of the parameters provided to simple-ql */
-const { reservedKeys, classifyData } = require('./database');
 const check = require('./utils/type-checking');
 const { dbColumn, database } = require('./utils/types');
+const { stringify, classifyData, reservedKeys } = require('./utils');
 
 /** Check that the tables that are going to be created are valid */
 function checkTables(tables) {
@@ -82,8 +82,12 @@ function checkDatabase(data) {
 
 /** Check that the rules are valid */
 function checkRules(rules, tables) {
-  function checkRule(value, possibleValues) {
-    return check(possibleValues.reduce((model, key) => {model[key] = 'function'; return model;}, {strict: true}), value);
+  function checkRule(value, possibleValues, ruleName) {
+    try {
+      return check(possibleValues.reduce((model, key) => ({...model, [key] : 'function'}), {strict: true}), value);
+    } catch(err) {
+      throw new Error(`We expect rule ${ruleName} to receive function parameters for keys ${JSON.stringify(possibleValues)}, but we received ${stringify(value)}`);
+    }
   }
   return Promise.all(Object.keys(rules).map(key => {
     const table = tables[key];
@@ -94,9 +98,9 @@ function checkRules(rules, tables) {
     return Promise.all(Object.keys(rule).map(ruleName => {
       const value = rule[ruleName];
       if(table[ruleName]) {
-        if(primitives.includes(ruleName)) return checkRule(value, ['read', 'write']);
-        if(objects.includes(ruleName)) return checkRule(value, ['read', 'write']);
-        if(arrays.includes(ruleName)) return checkRule(value, ['add', 'remove']);
+        if(primitives.includes(ruleName)) return checkRule(value, ['read', 'write'], ruleName);
+        if(objects.includes(ruleName)) return checkRule(value, ['read', 'write'], ruleName);
+        if(arrays.includes(ruleName)) return checkRule(value, ['add', 'remove'], ruleName);
         return Promise.reject(`This should not be possible. The issue occured with the rule ${ruleName} for table ${key}.`);
       } else {
         const instructions = ['read', 'write', 'create', 'delete'];

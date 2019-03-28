@@ -1,6 +1,14 @@
 # SimpleQL
 A node framework to manage your backend and your database with the least possible amount of code
 
+//Notes
+- Request:
+offset, limit, get, set, create, delete, add, remove
+- constraints:
+<, >, <=, >=, !, gt, lt, ge, le, not, ~, like
+- db:
+type, length, nullable, unsigned, defaultValue, autoIncrement,
+
 ## Getting Started
 
 ## Installation

@@ -86,7 +86,7 @@ const rules = {
       read : none,          //no one can read the password
     },
     contacts : {
-      create : and(
+      add : and(
         is('self'),                   //Only ourself can add contacts
         request(not(is('contacts')))  //Cannot add oneself as our own contact
       ), 
@@ -98,12 +98,12 @@ const rules = {
   },
   Feed : {
     comments: {
-      create : member('participants'),  //You need to be a member of the participants of the feed to create messages into the feed
-      delete : is('comments.author'),   //Only the author of a message can decide to delete it
+      add : member('participants'),  //You need to be a member of the participants of the feed to create messages into the feed
+      remove : is('comments.author'),   //Only the author of a message can decide to delete it
     },
     participants: {
-      create : none,        //Once the feed is created, no one can add participants
-      delete : none,        //Once the feed is created, no one can remove participants
+      add : none,        //Once the feed is created, no one can add participants
+      remove : none,        //Once the feed is created, no one can remove participants
     },
     delete : none,          //No one can delete a feed
     create : request(member('participants')), //Users always need to be a member of the feed they wish to create

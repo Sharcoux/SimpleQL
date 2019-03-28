@@ -81,8 +81,20 @@ createTestServer()
   }))
   .then(response => console.log('response ------', response.data) || response)
 
-
-//Creating a message
+  //Creating a message
+  .then(() => console.log('\x1b[36m%s\x1b[0m', 'Creating a message'))
+  .then(() => axios.post('/', {
+    Comment: {
+      create : {
+        content : 'test',
+        title : 'Test',
+        author: {
+          email : 'user1@email.com',
+        }
+      }
+    }
+  }))
+  .then(response => console.log('response ------', response.data) || response)
 
 //Editing the message
 

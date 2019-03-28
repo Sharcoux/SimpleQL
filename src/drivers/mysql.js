@@ -1,6 +1,5 @@
 const mysql = require('mysql');
-const { operators } = require('../database');
-const { isPrimitive } = require('../utils');
+const { isPrimitive, operators } = require('../utils');
 
 //Shortcuts for escaping
 /* Escaping values */
@@ -53,7 +52,7 @@ class Driver {
     let query = createQuery(`SELECT ${search.map(s => ei(s)).join(', ')} FROM ${ei(table)}`, where);
     if(offset) query += ` OFFSET ${es(parseInt(offset, 10))}`;
     if(limit) query += ` LIMIT ${es(parseInt(limit, 10))}`;
-    return this.query(query);
+    return this.query(query).then(results => results instanceof Array ? results : [results]);
   }
   delete({table, where}) {
     const query = createQuery(`DELETE FROM ${ei(table)}`, where);
@@ -68,7 +67,7 @@ class Driver {
       ) VALUES (
         ${Object.keys(element).map(k => this._escapeValue(table, k, element[k])).join(', ')}
       )`;
-      return this.query(query);
+      return this.query(query).then(results => results instanceof Array ? results.map(result => result.insertId) : results.insertId);
     }));
   }
   _escapeValue(table, key, value) {
@@ -96,7 +95,7 @@ class Driver {
       //We record binary columns to not escape their values during INSERT or UPDATE
       if(type==='binary') this.binaries.push(`${table}.${name}`);
 
-      let query = `, ${name} ${convertType(type)}`;
+      let query = `${name} ${convertType(type)}`;
       if(length) query += `(${length})`;
       if(unsigned) query += ' UNSIGNED';
       if(!nullable) query += ' NOT NULL';
@@ -120,8 +119,7 @@ class Driver {
     });
     //Create the table
     return this.query(`CREATE TABLE IF NOT EXISTS ${table} (
-        reservedId INT UNSIGNED NOT NULL AUTO_INCREMENT
-      ${columns.join('\n      ')}
+      ${columns.join(',\n      ')}
       ${indexes.join('\n      ')}
       , CONSTRAINT PK_${table} PRIMARY KEY (reservedId)
     )`);
@@ -169,7 +167,7 @@ function convertIntoCondition(conditions, operator = '=') {
     function writeCondition(value, operator = '=') {
       if(isPrimitive(value)) return writeValue(value, operator);
       if(['not', '!'].includes(operator)) return 'NOT ('+writeCondition(value)+')';
-      if(value instanceof Array) return value.map(v => '('+writeCondition(v, operator)).join(' OR ')+')';
+      if(value instanceof Array) return '('+value.map(v => writeCondition(v, operator)).join(' OR ')+')';
       else if(value instanceof Object) return '('+Object.keys(value).map(k => {
         if(!operators.includes(k)) throw new Error(`${k} is not a valid constraint for key ${key}`);
         if(!['not', '!', '='].includes(operator)) throw new Error(`${k} connot be combined with operator ${operator} in key ${key}`);
@@ -177,8 +175,8 @@ function convertIntoCondition(conditions, operator = '=') {
       }).join(' AND ')+')';
       throw new Error(`Should not be possible. We received this weird value : ${JSON.stringify(value)} which was nor object, nor array, nor primitive.`);
     }
-    return writeCondition(key, conditions[key], operator).join(' AND ');
-  });
+    return writeCondition(conditions[key], operator);
+  }).join(' AND ');
 }
 
 function convertType(type) {

@@ -1,5 +1,5 @@
 const readline = require('readline');
-const { isPrimitive, restrictContent } = require('./utils');
+const { isPrimitive, classifyData, classifyRequestData } = require('./utils');
 const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED } = require('./errors');
 
 class Database {
@@ -50,14 +50,15 @@ class Database {
    * @param {Object} request the request relative to that table
    * @returns {Object} The result of the local (partial) request
    */
-  applyInTable(rId, tableName, request, readOnly = false) {
+  applyInTable(rId, tableName, request, readOnly = false, parentRequest) {
+    if(!request) console.error(new Error());
     if(!request) return Promise.reject({
       type: BAD_REQUEST,
       message: `The request was ${request} in table ${tableName}`,
     });
     //If an array is provided, we concatenate the results of the requests
     if(request instanceof Array) {
-      return Promise.all(request.map(part => this.findInTable(rId, tableName, part, readOnly)))
+      return Promise.all(request.map(part => this.findInTable(rId, tableName, part, readOnly, parentRequest)))
         //[].concat(...array) will flatten array.
         .then(results => [].concat(...results))
         //Removes duplicates
@@ -69,7 +70,7 @@ class Database {
     }
     
     //create the request helper
-    const requestHelper = new RequestHelper({server : this, tableName, rId, request, readOnly});
+    const requestHelper = new RequestHelper({server : this, tableName, rId, request, readOnly, parentRequest});
     //Resolve the request
     return requestHelper.resolveRequest();
   }
@@ -101,10 +102,14 @@ function createTables(driver, tables, create) {
 function prepareTables(tables) {
   //We add the table name into each table data
   Object.keys(tables).forEach(tableName => tables[tableName].tableName = tableName);
+  //We add the reservedId props
+  const reservedId = {type : 'integer', length: 10, unsigned: true, autoIncrement : true};
+  Object.keys(tables).forEach(tableName => tables[tableName].reservedId = reservedId);
   //We transform the tables into a valid data model
   return Object.keys(tables).reduce((acc, tableName) => {
     const table = tables[tableName];
     const { empty, primitives, objects, arrays } = classifyData(table);
+    console.log(tableName, primitives);
 
     if(empty.length) throw new Error(`The fields ${empty.join(', ')} do not have a value.`);
     acc[tableName] = {}; //Create table entry
@@ -123,7 +128,7 @@ function prepareTables(tables) {
         unsigned : true,
       };
       //We need to change the index accordingly
-      if(acc[tableName].index || acc[tableName].index.hasOwnProperty(key)) {
+      if(acc[tableName].index && acc[tableName].index.hasOwnProperty(key)) {
         throw new Error(`indexes on keys referencing foreign tables will be ignored. Please remove index ${key} from table ${tableName}.`);
         // acc[tableName].index[key+'Id'] = acc[tableName].index[key];
         // delete acc[tableName].index[key];
@@ -136,6 +141,7 @@ function prepareTables(tables) {
     arrays.forEach(key => {
       const name = key+tableName;
       acc[name] = {
+        reservedId,
         [tableName+'Id'] : {
           type: 'integer',
           length : 10,
@@ -156,65 +162,11 @@ function prepareTables(tables) {
   }, {});
 }
 
-/** Classify the object props into 5 arrays:
- * - empty : keys whose value is present but undefined or null
- * - reserved : reserved keys having special meaning
- * - primitives : keys whose value is a primitive
- * - arrays : keys whose value is an array
- * - objects : keys whose value is an object which is not an array
- */
-function classifyData(object) {
-  const keys = Object.keys(object);
-  const {reserved, constraints, empty} = keys.reduce((acc, key) => {
-    if(reservedKeys.includes(key)) {
-      acc.reserved.push(key);
-    } else if(object[key]!==undefined || object[key]!==null) {
-      acc.constraints.push(key);
-    } else {
-      acc.empty.push(key);
-    }
-    return acc;
-  }, {reserved: [], constraints: [], empty: []});
-  const {primitives, objects, arrays} = constraints.reduce(
-    (acc,key) => {
-      const value = object[key];
-      const belongs = isPrimitive(value) ? 'primitives' : value instanceof Array ? 'arrays' : 'objects';
-      acc[belongs].push(key);
-      return acc;
-    },
-    {primitives: [], objects: [], arrays: []}
-  );
-  return {
-    empty, reserved, primitives, objects, arrays
-  };
-}
-
-/** Classify request fields of a request inside a table into 4 categories
- * - request : the request restricted to only the fields defined in the tables
- * - search : keys whose value is present but undefined
- * - primitives : keys which are a column of the table
- * - objects : keys that reference an object in another table (key+'Id' is a column inside the table) 
- * - arrays : keys that reference a list of objects in another table (through an association table named key+tableName)
- * We also update the request if it was "*"
- */
-function classifyRequestData(request, table) {
-  const tableData = classifyData(table);
-
-  //We allow using '*' to mean all columns
-  if(request.get==='*') request.get = [...tableData.primitives];
-  //We restrict the request to only the field declared in the table
-  //fields that we are trying to get info about
-  const search = restrictContent(request.get || [], tableData.primitives);
-  //constraints for the research
-  const [primitives, objects, arrays] = ['primitives', 'objects', 'arrays'].map(key => restrictContent(tableData[key], Object.keys(request)));
-  return { request, search, primitives, objects, arrays };
-}
-
 function createWhereClause(request, primitives, objects) {
   const where = {};
-  primitives.forEach(key => where[key] = source[key]);
+  primitives.forEach(key => where[key] = request[key]);
   //If resolveObjects succeeded, source[key+'Id'] now contains the id or ids of the resolved object
-  objects.forEach(key => where[key+'Id'] = source[key+'Id']);
+  objects.forEach(key => where[key+'Id'] = request[key+'Id']);
   return where;
 }
 
@@ -247,18 +199,18 @@ function createDatabase(tables, database, rules) {
     });
 }
 
-/** This will let you handle a request workflow to a table */
+/** This will handle a request workflow for a single table */
 class RequestHelper {
-  constructor({server, tableName, rId, request: initialRequest, readOnly}) {
+  constructor({server, tableName, rId, request: initialRequest, readOnly, parentRequest}) {
     console.log('treating ', tableName, initialRequest);
     this.server = server;
     this.table = server.tables[tableName];
     this.tableName = tableName;
     this.rId = rId;
     this.readOnly = readOnly;
+    this.parent = parentRequest;
     //Classify the request into the elements we will need
     const {request, search, primitives, objects, arrays} = classifyRequestData(initialRequest, this.table);
-    this.tableData = classifyData(this.table);
     this.request = request;
     this.search = search;
     this.primitives = primitives;
@@ -272,44 +224,45 @@ class RequestHelper {
 
     //We will store here the information gathered about children into the database
     this.resolvedObjects = {};
+    this.addResolvedObject = (object => {
+      //We merge the data
+      return this.resolveObjects[object.reservedId] = {...(this.resolveObjects[object.reservedId] || {}), ...object};
+    }).bind(this);
 
     //Identity function (used to ignore some behaviours in readOnly mode)
-    const nothing = result => result;
+    const skip = result => result;
+
+    this.applyInTable = (request => {
+      return this.sever.applyInTable(this.rId, this.tableName, request, this.readOnly, {...this.request, parent : this.parent});
+    });
 
     this.integrityCheck = this.integrityCheck.bind(this);
     this.resolveRequest = this.resolveRequest.bind(this);
-    this.delete = readOnly ? nothing : this.delete.bind(this);
-    this.create = readOnly ? nothing : this.create.bind(this);
+    this.delete = readOnly ? skip : this.delete.bind(this);
+    this.create = readOnly ? skip : this.create.bind(this);
     this.resolveObjects = this.resolveObjects.bind(this);
     this.queryDatabase = this.queryDatabase.bind(this);
     this.setResolvedObjects = this.setResolvedObjects.bind(this);
-    this.update = readOnly ? nothing : this.update.bind(this);
+    this.update = readOnly ? skip : this.update.bind(this);
     this.resolveChildrenArrays = this.resolveChildrenArrays.bind(this);
-    this.updateChildrenArrays = readOnly ? nothing : this.updateChildrenArrays.bind(this);
+    this.updateChildrenArrays = readOnly ? skip : this.updateChildrenArrays.bind(this);
     this.controlAccess = this.controlAccess.bind(this);
   }
 
   integrityCheck() {
     console.log('\x1b[35m%s\x1b[0m', 'integrityCheck');
     //If this request is authenticated with the privateKey, we don't need to control access.
-    if(this.rId === this.server.privateKey) return;
-    const tableName = this.tableName;
-    const checkData = (keys, request, model) =>  {
-      const { primitives, objects, arrays } = classifyRequestData(req, this.table);
+    if(this.rId === this.server.privateKey) return Promise.resolve();
+    const checkData = (request, tableModel) =>  {
+      const { primitives, objects, arrays } = classifyRequestData(request, this.table);
       return Promise.all(primitives.map(key => {
         const isValue = value => {
-          if(value===null) return;
-          if(isPrimitive(value)) {
-            if(typeof value === tableModel[key]) return;
-            return Promise.reject({
-              type : BAD_REQUEST,
-              message : `Bad value ${value} provided for field ${key} in table ${tableName}. We expect null, a ${tableModel[key]}, or an array of these types.`
-            })
-          }
+          if(value===null) return Promise.resolve();
+          if(isPrimitive(value)) return Promise.resolve();
           //This is the way to represent OR condition
           if(value instanceof Array) return Promise.all(value.map(isValue));
           //This is the way to create a AND condition
-          if(value instanceof Object) return Promise.all(Object.values(value).map(isValue))
+          if(value instanceof Object) return Promise.all(Object.values(value).map(isValue));
           return Promise.reject({
             type : BAD_REQUEST,
             message : `Bad value ${value} provided for field ${key} in table ${this.tableName}. We expect null, a ${tableModel[key]}, an object, or an array of these types.`
@@ -319,8 +272,9 @@ class RequestHelper {
       })).then(() => Promise.all([...objects, ...arrays].map(key => {
         if(request[key]!==null && isPrimitive(request[key])) return Promise.reject({
           type : BAD_REQUEST,
-          message : `Bad value ${value} provided for field ${key} in table ${this.tableName}. We expect null, an object, or an array of these types.`
-      })})));
+          message : `Bad value ${request[key]} provided for field ${key} in table ${this.tableName}. We expect null, an object, or an array of these types.`
+        });
+      })));
     };
     const requests = [
       this.request,
@@ -330,7 +284,7 @@ class RequestHelper {
       this.request.add,
       this.request.remove,
     ];
-    return Promise.all(requests.map(req => req || checkData(req, this.server.tableModel[this.tableName])));
+    return Promise.all(requests.map(req => req && checkData(req, this.server.tablesModel[this.tableName])));
   }
 
   /** Remove elements from the table if request.delete is defined */
@@ -338,7 +292,7 @@ class RequestHelper {
     console.log('\x1b[35m%s\x1b[0m', 'delete');
     if(!this.request.delete) return Promise.resolve();
     //Look for matching objects
-    return this.server.findInTable(this.server.privateKey, this.tableName, this.request.delete)
+    return this.server.findInTable(this.server.privateKey, this.tableName, {...this.request.delete, get:['reservedId']})
       //We record the objects we are going to delete for later access control
       .then(results => (this.deleted = results))
       //We update the server
@@ -353,7 +307,7 @@ class RequestHelper {
     console.log('\x1b[35m%s\x1b[0m', 'create');
     if(!this.request.create) return Promise.resolve();
     const prepareElement = req => {
-      const { request, primitives, objects, arrays } = classifyRequestData(req, this.table);
+      const { request, primitives, objects } = classifyRequestData(req, this.table);
       //We transform inputs about objects into their ids inside the request
       //TODO gérer les références internes entre créations (un message et un feed par exemple ? un user et ses contacts ?)
       return Promise.all(objects.map(key => {
@@ -364,74 +318,95 @@ class RequestHelper {
           return null;
         }
         //We get the children id and define the key+Id property accordingly
-        return this.server.findInTable(this.server.privateKey, this.table[key].tableName, request[key]).then(result => {
+        return this.server.findInTable(this.server.privateKey, this.table[key].tableName, {...request[key], get: ['reservedId']}).then(result => {
           if(result.length===0) return Promise.reject({
             type: NOT_SETTABLE,
             message: `We could not find the object supposed to be set for key ${key} in ${this.tableName}: ${JSON.stringify(req[key])}.`
-          })
+          });
           else if(result.length>1) return Promise.reject({
             type: NOT_UNIQUE,
             message: `We found multiple solutions for setting key ${key} in ${this.tableName}: ${JSON.stringify(req[key])}.`
-          })
+          });
           //Only one result
           else {
+            //Edit the request to replace objects by their ids
             request[key+'Id'] = result[0].reservedId;
-            this.resolvedObjects[result[0].reservedId] = result[0];
+            this.addResolvedObject(result[0]);
             delete request[key];
           }
         });
       }))
         .then(() => {
+          //Restrict the request elements to only primitives and object constraints
           const element = [...primitives, ...objects.map(key => key+'Id')].reduce((acc, key) => {acc[key]=request[key];return acc;}, {});
-          //Record the elements that we have created during the request
-          this.created = element;
           return element;
         });
     };
-    return this.server.driver.create({
-      table : this.tableName,
-      elements : this.request.create instanceof Array ? this.request.create.map(prepareElement) : prepareElement(this.request.create),
-    })
+
+    //Resolve the creation request
+    const requests = this.request.create instanceof Array ? this.request.create : [this.request.create];
+    return Promise.all(requests.map(prepareElement)).then(elements =>
+      //Create the elements inside the database
+      this.server.driver.create({
+        table : this.tableName,
+        elements,
+      }).then(reservedIds => {
+        //Record created elements
+        this.created = elements.map((element, index) => ({...element, reservedId : reservedIds[index]}));
+        //Arrays affectations (create items into association tables if necessary)
+        return Promise.all(requests.map((req, index) => {
+          const { arrays } = classifyRequestData(req, this.table);
+          const reservedId = reservedIds[index];
+          //List the objects that needs to be inserted into the newly created object arrays
+          const creation = arrays.reduce((acc, key) => ({...acc, [key]: { add: req }}), {});
+          //This will insert the required item in the association tables
+          return this.server.applyInTable(this.rId, this.tableName, { reservedId, ...creation});
+        }));
+      })
+    );
   }
 
   /** We look for objects that match the request constraints and store their id into the key+Id property and add the objects into this.resolvedObjects map */
-  resolveObjects(rId, request) {
-    console.log('\x1b[35m%s\x1b[0m', 'resolveObjects', request);
-    if(!request) return Promise.resolve();
-    const { objects } = classifyRequestData(request, this.table);
+  resolveObjects() {
+    console.log('\x1b[35m%s\x1b[0m', 'resolveObjects');
     //We resolve the children objects
-    return Promise.all(objects.map(key => {
+    return Promise.all(this.objects.map(key => {
       //Take care of null value
-      if(request[key]===null) {
-        request[key+'Id'] = null;
-        delete request[key];
+      if(this.request[key]===null) {
+        this.request[key+'Id'] = null;
+        delete this.request[key];
         return null;
       }
+      const get = this.request[key].get || [];
       //We get the children id and define the key+Id property accordingly
-      return this.server.findInTable(rId, this.table[key].tableName, request[key]).then(result => {
+      return this.server.findInTable(this.rId, this.table[key].tableName, {...this.request[key], get: [...get, 'reservedId']}).then(result => {
         if(result.length===0) return Promise.reject({
           type: NOT_FOUND,
-          key,
-          message: `Nothing found with these constraints : ${this.tableName}->${key}->${JSON.stringify(request[key])}`,
+          message: `Nothing found with these constraints : ${this.tableName}->${key}->${JSON.stringify(this.request[key])}`,
         });
-        if(result.length===1) {
-          request[key+'Id'] = result[0].reservedId;
-          this.resolvedObjects[result[0].reservedId] = result[0];
+        else if(result.length===1) {
+          this.request[key+'Id'] = result[0].reservedId;
+          this.addResolvedObject(result[0]);
         } else {
-          request[key+'Id'] = result.map(object => object.reservedId);
-          result.forEach(object => this.resolvedObjects[object.reservedId] = object);
+          this.request[key+'Id'] = result.map(object => object.reservedId);
+          result.forEach(this.addResolvedObject);
         }
-        delete request[key];
+        delete this.request[key];
       });
     }));
   }
 
   /** Look into the database for objects matching the constraints. */
   queryDatabase() {
+    if(!this.search.length && !this.arrays.find(key => this.request[key].add || this.request[key].remove) && !this.request.set) {
+      console.log('\x1b[35m%s\x1b[0m', 'ignoring queryDatabase');
+      return [];
+    }
     console.log('\x1b[35m%s\x1b[0m', 'queryDatabase');
+    if(!this.search.includes('reservedId')) this.search.push('reservedId');
     return this.server.driver.get({
       table : this.tableName,
-      search : [...this.search, ...this.objects.map(key => key+'Id'), 'reservedId'],//We always want to retrieve the id, at least for arrays constraints
+      search : [...this.search],
       where : createWhereClause(this.request, this.primitives, this.objects),
       limit : this.request.limit,
       offset : this.request.offset,
@@ -445,7 +420,7 @@ class RequestHelper {
       this.objects.forEach(key => {
         const resolve = id => this.resolvedObjects[id];
         const ids = result[key+'Id'];
-        result[key] = ids instanceof Array ? ids.map(resolve) : resolve(ids)
+        result[key] = ids instanceof Array ? ids.map(resolve) : resolve(ids);
         delete result[key+'Id'];
       })
     );
@@ -455,92 +430,98 @@ class RequestHelper {
   /** Change the table's values if request.set is defined */
   update(results) {
     if(!this.request.set) return Promise.resolve(results);
-    return this.resolveObjects(this.server.privateKey, this.request.set)
-      //Handle object not found
-      .catch(err => {
-        if(err.type===NOT_FOUND) return Promise.reject({
-          type: NOT_SETTABLE,
-          message: `We could not find the object supposed to be set for key ${err.key} in ${this.tableName}: ${this.request.set[err.key]}`
-        });
-        return Promise.reject(err);
-      })
-      //Handle multiple objects found for one field
-      .then(() =>
-        this.request.set.forEach(key => this.request.set[key] instanceof Array || Promise.reject({
-          type: NOT_UNIQUE,
-          message: `We found multiple solutions for setting key ${key} in ${this.tableName}: ${JSON.stringify(this.request.set[key])}`
-        }))
-      )
-
-      //We update the server
-      .then(() => this.server.driver.update({
+    const request = this.request.set;
+    const { primitives, objects } = classifyRequestData(request, this.table);
+    //Find the objects matching the constraints to be replaced
+    return Promise.all(objects.map(key =>
+      this.server.findInTable(this.server.privateKey, this.table[key].tableName, {...request[key], get: ['reservedId']})
+        .then(matches => {
+          if(matches.length===0) return Promise.reject({
+            type: NOT_SETTABLE,
+            message: `We could not find the object supposed to be set for key ${key} in ${this.tableName}: ${JSON.stringify(request[key])}.`
+          });
+          else if(matches.length>1) return Promise.reject({
+            type: NOT_UNIQUE,
+            message: `We found multiple solutions for setting key ${key} in ${this.tableName}: ${JSON.stringify(request[key])}.`
+          });
+          //Only one result
+          else {
+          //Edit the request to replace objects by their ids
+            request[key+'Id'] = matches[0].reservedId;
+            this.addResolvedObject(matches[0]);
+            delete request[key];
+          }
+        })
+    ))
+      //Reduce to only the primitives and objects constraints
+      .then(() => [...primitives, ...objects.map(key => key+'Id')].reduce((acc,key) => {acc[key]=request[key];return acc;}, {}))
+      //Update the database
+      .then(values => this.server.driver.update({
         table : this.tableName,
-        values : this.request.set,
+        values,
         where : { reservedId : results.map(result => result.reservedId) },
       }))
-
       //We return the research results
       .then(() => results);
   }
 
+
   updateChildrenArrays(results) {
     console.log('\x1b[35m%s\x1b[0m', 'updateChildrenArrays', results);
-    return Promise.all(this.arrays.map(key => {
-
-  }
-
-  resolveChildrenArrays(results) {
-    console.log('\x1b[35m%s\x1b[0m', 'resolveChildrenArrays', results);
     return Promise.all(this.arrays.map(key => {
       const { add, remove } = this.request[key];
 
       return Promise.resolve()
         //We remove elements from the association table
-        .then(() => remove || this.server.findInTable(this.rId, this.table[key][0].tableName, remove).then(arrayResults => this.server.driver.delete({
-          table : `${key}${this.tableName}`,
-          where : {
-            [this.tableName+'Id'] : results.map(result => result.reservedId),
-            [key+'Id'] : arrayResults.map(result => result.reservedId),
-          }
-        })))
+        .then(() => remove && this.server.findInTable(this.server.privateKey, this.table[key][0].tableName, {...remove, get: ['reservedId']})
+          .then(arrayResults => this.server.driver.delete({
+            table : `${key}${this.tableName}`,
+            where : {
+              [this.tableName+'Id'] : results.map(result => result.reservedId),
+              [key+'Id'] : arrayResults.map(result => result.reservedId),
+            }
+          })))
         //We add elements into the association table
-        .then(() => add || this.server.findInTable(this.rId, this.table[key][0].tableName, add).then(arrayResults => this.server.driver.create({
-          table : `${key}${this.tableName}`,
-          //[].concat(...array) will flatten array.
-          elements : [].concat(...results.map(result => arrayResults.map(arrayResult => ({
-            [this.tableName+'Id'] : result.reservedId,
-            [key+'Id'] : arrayResult.reservedId,
-          })))),
-        })))
-      
-        //We resolve queries about arrays
-        .then(() => this.server.findInTable(this.rId, this.table[key][0].tableName, this.request[key]))
+        .then(() => add && this.server.findInTable(this.server.privateKey, this.table[key][0].tableName, {...add, get: ['reservedId']})
+          .then(arrayResults => console.log([...arrayResults]) || this.server.driver.create({
+            table : `${key}${this.tableName}`,
+            //[].concat(...array) will flatten array.
+            elements : [].concat(...results.map(result => arrayResults.map(arrayResult => ({
+              [this.tableName+'Id'] : result.reservedId,
+              [key+'Id'] : arrayResult.reservedId,
+            })))),
+          })));
+    })).then(() => results);
+  }
+
+  resolveChildrenArrays(results) {
+    console.log('\x1b[35m%s\x1b[0m', 'resolveChildrenArrays', results);
+    return Promise.all(this.arrays.map(key => {
+      const get = this.request[key].get || [];
+      //We resolve queries about arrays
+      return this.server.findInTable(this.server.privateKey, this.table[key][0].tableName, {...this.request[key], get: [...get, 'reservedId']})
         //We register the data into resolvedObjects
         .then(arrayData => {
-          arrayData.forEach(object => this.resolvedObjects[object.reservedId] = object);
+          arrayData.forEach(this.addResolvedObject);
           return arrayData;
         })
         //We filter the data to only the data associated to the source in the association table
         .then(arrayData => Promise.all(results.map(result => this.server.driver.get({table : `${key}${this.tableName}`, search : ['reservedId'], where : {
-            [this.tableName+'Id'] : result.reservedId,
-            [key+'Id'] : arrayData.length===1 ? arrayData[0].reservedId : arrayData.map(data => data.reservedId),
-          }}).then(matches => matches.length ? result : null)))
-            //We keep only the results that have a matching solution in the table
-            .then(matchedResults => matchedResults.filter(result => result!==null))
-            //If we didn't find any object
-            .then(matches => matches.length ? matches : Promise.reject({
-              type : NOT_FOUND,
-              message : `Impossible to find results for field ${key} in table ${this.table} mathing ${JSON.stringify(this.request[key])}.`,
-            }))
-            //We replace ids by the resolved objects
-            .then(matches => matches.map(match => match[key+'Id']))
-            .then(matchIds => result[key]=matchIds.map(reservedId => this.resolvedObjects[reservedId]))
-              ))
-            );
-        });
+          [this.tableName+'Id'] : result.reservedId,
+          [key+'Id'] : arrayData.length===1 ? arrayData[0].reservedId : arrayData.map(data => data.reservedId),
+        }}).then(matches => result[key] = matches.map(this.addResolvedObject))))
+        //We keep only the results that have a matching solution in the table
+          .then(() => results.filter(result => result[key]!==null))
+        //If we didn't find any object
+          .then(matches => matches.length ? matches : Promise.reject({
+            type : NOT_FOUND,
+            message : `Impossible to find results for field ${key} in table ${this.table} mathing ${JSON.stringify(this.request[key])}.`,
+          }))
+        //We replace the resolved objects inside the results
+        );
     })).then(() => results);
   }
-
+  
   controlAccess(results) {
     console.log('\x1b[35m%s\x1b[0m', 'controlAccess', results);
     const ruleSet = this.server.rules[this.tableName];
@@ -557,7 +538,7 @@ class RequestHelper {
     //Write access
     return Promise.resolve().then(() => {
       if(!this.request.set) return Promise.resolve();
-      const { primitives, objects } = classifyData(this.request.set);
+      const { primitives, objects } = classifyRequestData(this.request.set, this.table);
       return Promise.all([...primitives, ...objects].map(key => {
         if(this.request.set[key]) {
           if(ruleSet[key].write || ruleSet[key].write({})) return Promise.resolve();
@@ -617,10 +598,14 @@ class RequestHelper {
       .then(this.setResolvedObjects)
       //Update
       .then(this.update)
+      //Add or remove items from the association tables
+      .then(this.updateChildrenArrays)
       //resolve children arrays data
       .then(this.resolveChildrenArrays)
+      //We add created items to the response
+      .then(results => results.concat(this.created))
       //We control the data accesses
-      .then(this.controlAccess)
+      // .then(this.controlAccess)
       //If nothing matches the request, the result should be an empty array
       .catch(err => {
         if(err.type===NOT_FOUND) return Promise.resolve([]);
@@ -630,13 +615,7 @@ class RequestHelper {
   }
 }
 
-const reservedKeys = ['reservedId', 'set', 'get', 'delete', 'create', 'add', 'remove', 'not', 'like', 'or', 'limit', 'offset', 'tableName', 'foreignKeys'];
-const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', '~', '!'];
 
 module.exports = {
-  classifyData,
-  classifyRequestData,
   createDatabase,
-  reservedKeys,
-  operators,
 };

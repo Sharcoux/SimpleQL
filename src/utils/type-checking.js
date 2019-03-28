@@ -1,11 +1,15 @@
+const { stringify } = require('./');
+
 function checkType(model, data) {
   if(!model) return;
   if(data===undefined) throw generateError(model, data, '');
   else if(Object(data) instanceof String) {
-    if(!'string'.match(new RegExp(model))) throw generateError(formatModel(model), JSON.stringify(data), '');
+    if(!'string'.match(new RegExp(model))) throw generateError(formatModel(model), stringify(data), '');
     return;
+  } else if(data instanceof Function) {
+    if(model!=='function') throw generateError(formatModel(model), data);
   } else if(data!==null && data instanceof Object) {
-    if(!(model instanceof Object)) throw generateError(formatModel(model), JSON.stringify(data, undefined, 4) + '\n', '');
+    if(!(model instanceof Object)) throw generateError(formatModel(model), stringify(data) + '\n', '');
     const keys = Object.keys(model);
     keys.forEach(key => {
       if(model.required && model.required.includes(key) && (data[key]===undefined || data[key]===null)) throw generateError(model[key]+'(required)', undefined, key);
@@ -21,7 +25,7 @@ function checkType(model, data) {
     const unknownKey = Object.keys(data).find(key => !keys.includes(key));
     if(unknownKey && strict) throw generateError('nothing', data[unknownKey], unknownKey);
   } else {
-    if(!(Object(model) instanceof String)) throw generateError(formatModel(model), JSON.stringify(data), '');
+    if(!(Object(model) instanceof String)) throw generateError(formatModel(model), stringify(data), '');
     if((getType(data)).match(new RegExp(model))) return;
     throw generateError(model, data, '');
   }
@@ -50,7 +54,7 @@ function check(model, data) {
     checkType(model, data);
   } catch(err) {
     const { expected, received, path } = err;
-    if(expected || received) throw new Error(`We expected ${JSON.stringify(expected, undefined, 4)} but we received ${JSON.stringify(received, undefined, 4)}${path && ` for ${path}`} in ${JSON.stringify(data, undefined, 4)}`);
+    if(expected || received) throw new Error(`We expected ${stringify(expected)} but we received ${stringify(received)}${path && ` for ${path}`} in ${stringify(data)}`);
     else throw err;
   }
 }
@@ -65,7 +69,7 @@ function formatModel(model) {
       acc[key] = formatModel(model[key]) + (required.includes(key) ? ' (required)' : '');
       return acc;
     }, {});
-    return JSON.stringify(formatted, undefined, 4) + (strict ? ' (strict)' : '') + '\n';
+    return stringify(formatted) + (strict ? ' (strict)' : '') + '\n';
   }
   else {
     return model.toString();

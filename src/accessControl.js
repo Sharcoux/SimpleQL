@@ -1,5 +1,4 @@
-// import { restrictContent } from '.utils';
-// import { classifyRequestData } from './database';
+const { restrictContent, classifyRequestData } = require('./utils');
 const { DATABASE_ERROR } = require('./errors');
 
 /** Rule that enables anyone */
