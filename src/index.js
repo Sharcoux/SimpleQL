@@ -10,12 +10,12 @@ module.exports = {
   createServer,
 };
 
-function createServer({port = 443, login = {login: 'email', password: 'password', salt: null, userTable: 'User'}, tables, database, rules, middlewares = [] }) {
+function createServer({port = 443, login = {login: 'email', password: 'password', salt: null, userTable: 'User'}, tables, database, rules, preprocessing, middlewares = [] }) {
 
   //Check data
-  return checkParameters(tables, database, rules)
+  return checkParameters({tables, database, rules, preprocessing})
     //Create the database
-    .then(() => createDatabase(tables, database, rules))
+    .then(() => createDatabase({tables, database, rules, preprocessing}))
     .then(db => {
       console.log('\x1b[32m%s\x1b[0m', `${database.database} database ready to be used!`);
       //Create authentication middleware
@@ -50,30 +50,35 @@ function simpleQL(db) {
       res.locals.results = results;
       next();
     }).catch(err => {
-      switch(err.type) {
-        case NOT_SETTABLE:
-        case NOT_UNIQUE:
-        case BAD_REQUEST:
-          res.writeHead(402);
-          res.end(err.message);
-          break;
-        case NOT_FOUND:
-          res.writeHead(404);
-          res.end(err.message);
-          break;
-        case DATABASE_ERROR:
-          res.writeHead(500);
-          res.end(err.message);
-          break;
-        case UNAUTHORIZED:
-          res.writeHead(401);
-          res.end(err.message);
-          break;
-        default:
-          res.writeHead(500);
-          console.error(err);
-          res.end(err);
-          break;
+      if(err.type instanceof Number) {
+        res.writeHead(err.type);
+        res.end(err.message);
+      } else {
+        switch(err.type) {
+          case NOT_SETTABLE:
+          case NOT_UNIQUE:
+          case BAD_REQUEST:
+            res.writeHead(402);
+            res.end(err.message);
+            break;
+          case NOT_FOUND:
+            res.writeHead(404);
+            res.end(err.message);
+            break;
+          case DATABASE_ERROR:
+            res.writeHead(500);
+            res.end(err.message);
+            break;
+          case UNAUTHORIZED:
+            res.writeHead(401);
+            res.end(err.message);
+            break;
+          default:
+            res.writeHead(500);
+            console.error(err);
+            res.end(err);
+            break;
+        }
       }
       next(err);
     });

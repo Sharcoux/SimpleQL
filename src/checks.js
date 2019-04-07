@@ -117,8 +117,17 @@ function checkRules(rules, tables) {
     )));
 }
 
-module.exports = (tables, database, rules) => {
+function checkPreprocessing(preprocessing, tables) {
+  if(!(preprocessing instanceof Object)) return Promise.reject('preprocessing should be an object');
+  const undefinedKey = Object.keys(preprocessing).find(key => !Object.keys(tables).includes(key));
+  if(undefinedKey) return Promise.reject(`${undefinedKey} is not one of the defined tables. Preprocessing should only contains existing tables.`);
+  const notFunction = Object.keys(preprocessing).find(key => !(preprocessing[key] instanceof Function));
+  if(notFunction) return Promise.reject(`${notFunction} is not a function in preprocessing object.`);
+}
+
+module.exports = ({tables, database, rules, preprocessing}) => {
   return checkTables(tables)
     .then(() => checkDatabase(database))
-    .then(() => checkRules(rules, tables));
+    .then(() => checkRules(rules, tables))
+    .then(() => checkPreprocessing(preprocessing, tables));
 };

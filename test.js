@@ -47,13 +47,13 @@ createTestServer()
   .then(response => console.log('response ------', response.data) || response)
   
   //Forbidden : retrieve user2 private data
-  // .then(() => axios.post('/', {
-  //   User: {
-  //     get: '*',
-  //   }
-  // }))
-  // .then(response => console.log(response.data))
-  //Adding a user as contact
+  .then(() => axios.post('/', {
+    User: {
+      get: '*',
+    }
+  }))
+  .then(response => console.log(response.data))
+//Adding a user as contact
   .then(() => console.log('\x1b[36m%s\x1b[0m', 'Adding a contact'))
   .then(() => axios.post('/', {
     User: {
@@ -63,33 +63,39 @@ createTestServer()
       }
     }
   }))
-  .then(response => console.log('response ------', response.data) || response)
+  .then(response => console.log('response ------', JSON.stringify(response.data)) || response)
 
   //Creating a feed
   .then(() => console.log('\x1b[36m%s\x1b[0m', 'Creating a feed for the users'))
   .then(() => axios.post('/', {
     Feed: {
       create : {
-        participants : {
-          add : [
-            {email : 'user1@email.com'},
-            {email : 'user2@email.com'},
-          ]
-        }
+        participants : [
+          {email : 'user1@email.com'},
+          {email : 'user2@email.com'},
+        ]
       }
     }
   }))
-  .then(response => console.log('response ------', response.data) || response)
+  .then(response => console.log('response ------', JSON.stringify(response.data)) || response)
 
   //Creating a message
   .then(() => console.log('\x1b[36m%s\x1b[0m', 'Creating a message'))
   .then(() => axios.post('/', {
-    Comment: {
-      create : {
-        content : 'test',
-        title : 'Test',
-        author: {
-          email : 'user1@email.com',
+    Feed : {
+      participants : [
+        { email : 'user1@email.com' },
+        { email : 'user2@email.com' },
+      ],
+      comments : {
+        add : {
+          create : {
+            content : 'test',
+            title : 'Test',
+            author: {
+              email : 'user1@email.com',
+            }
+          }
         }
       }
     }

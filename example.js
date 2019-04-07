@@ -125,23 +125,30 @@ const rules = {
 };
 
 // You can always preprocess the request if some fields requier extra attention
-const requestPreprocessing = (req, res, next) => {
-  if(!req.body) next();
-  const {Comment, Feed} = req.body;
-  //We update the `lastModification` field each time a modification happens
-  if(Comment && Comment.set) Comment.set.lastModification = new Date();
-  //To create a message, the message needs to be associated to an existing feed
-  if(Comment && Comment.create) {
-    res.writeHead(402);
-    res.end('Message creation should always be made through a Feed');
+const preprocessing = {
+  Comment: ({request, parent}) => {
+    if(request.create) {
+      //To create a message, the message needs to be associated to an existing feed
+      if(parent.request && parent.request.tableName !== 'Feed') {
+        return Promise.reject({
+          error: 402,
+          message: 'Message creation should always be made through a Feed'
+        });
+      }
+      //Upon creation, we set the fields `date` and `lastModification`.
+      const date = new Date();
+      if(request.create instanceof Array) {
+        request.create = request.create.map(req => ({...req, date, lastModification: date}));
+      } else request.create = {...request.create, date, lastModification : date};
+    }
+    if(request.set) {
+      //We update the `lastModification` field each time a modification happens
+      const date = new Date();
+      if(request.set instanceof Array) {
+        request.set = request.set.map(req => ({...req, lastModification: date}));
+      } else request.set = {...request.set, lastModification : date};
+    }
   }
-  //Upon creation, we set the fields `date` and `lastModification`.
-  if(Feed && Feed.comments && Feed.comments.create) {
-    const date = new Date();
-    Feed.comments.create.date = date;
-    Feed.comments.create.lastModification = date;
-  }
-  next();
 };
 
-module.exports = () => createServer({port : 80, tables, login, database, rules, middlewares: [requestPreprocessing]});
+module.exports = () => createServer({port : 80, tables, login, database, rules, preprocessing});

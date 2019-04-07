@@ -8,6 +8,8 @@ offset, limit, get, set, create, delete, add, remove
 <, >, <=, >=, !, gt, lt, ge, le, not, ~, like
 - db:
 type, length, nullable, unsigned, defaultValue, autoIncrement,
+- createServer
+createServer({port = 443, login = {login: 'email', password: 'password', salt: null, userTable: 'User'}, tables, database, rules, preprocessing, middlewares = [] }
 
 ## Getting Started
 
