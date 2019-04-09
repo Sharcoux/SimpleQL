@@ -10,6 +10,8 @@ offset, limit, get, set, create, delete, add, remove
 type, length, nullable, unsigned, defaultValue, autoIncrement,
 - createServer
 createServer({port = 443, login = {login: 'email', password: 'password', salt: null, userTable: 'User'}, tables, database, rules, preprocessing, middlewares = [] }
+types:
+'string', 'integer', 'float', 'double', 'decimal', 'date', 'dateTime', 'boolean', 'text', 'binary'
 
 ## Getting Started
 

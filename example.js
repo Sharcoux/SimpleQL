@@ -61,16 +61,16 @@ const login = {
 
 // You can always create your own rules. The parameters are described in the documentation.
 /** Ensure that only the feed's participants can read the message content */
-const customRule = ({authId, tableRequest, driver}) => driver.request(database.privateKey, {
+const customRule = ({authId, query}) => ({request}) => query({
   Feed: {
     comments: {
-      ...tableRequest,
+      ...request,
       set: undefined,
       create: undefined,
       delete: undefined,
     },
     participants: {
-      id: undefined,
+      get: ['reservedId'],
     }
   },
 }).then(result => {
@@ -88,7 +88,7 @@ const rules = {
     contacts : {
       add : and(
         is('self'),                   //Only ourself can add contacts
-        request(not(is('contacts')))  //Cannot add oneself as our own contact
+        request(not(member('contacts')))  //Cannot add oneself as our own contact
       ), 
     },
     create : all,           //Creation is handled by login middleware. No one should create Users from request.
@@ -127,6 +127,7 @@ const rules = {
 // You can always preprocess the request if some fields requier extra attention
 const preprocessing = {
   Comment: ({request, parent}) => {
+    console.log(parent);
     if(request.create) {
       //To create a message, the message needs to be associated to an existing feed
       if(parent.request && parent.request.tableName !== 'Feed') {

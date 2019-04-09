@@ -1,5 +1,7 @@
 const mysql = require('mysql');
 const { isPrimitive, operators } = require('../utils');
+var fs = require('fs');
+var log_file = fs.createWriteStream(__dirname + '/debug.log', {flags : 'w'});
 
 //Shortcuts for escaping
 /* Escaping values */
@@ -9,9 +11,11 @@ const ei = mysql.escapeId;
 
 //TODO : format requests results
 class Driver {
-  constructor(connection) {
+  constructor(pool) {
     this.binaries = [];
-    this.connection = connection;
+    this.pool = pool;
+    this.connection = pool;
+    this.inTransaction = false;
     this.query = this.query.bind(this);
     this.get = this.get.bind(this);
     this.update = this.update.bind(this);
@@ -20,10 +24,11 @@ class Driver {
     this.createTable = this.createTable.bind(this);
     this._escapeValue = this._escapeValue.bind(this);
   }
-  query(query) {
+  query(query, trials = 3) {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(`timeout for requet ${query}`), 3000);
+      const timeout = setTimeout(() => reject(`timeout for requet ${query}`), 300000);
       console.log(`Executing ${query}`);
+      log_file.write(query+';\n');
       this.connection.query(query+';', (error, results) => {
         if(results instanceof Array) console.log('results', results);
         clearTimeout(timeout);
@@ -32,20 +37,40 @@ class Driver {
       });
     }).catch(err => {
       console.error(err);
-      return Promise.reject(err);
+      if(trials) return this.query(query, trials-1);
+      else return Promise.reject(err);
     });
   }
   destroy() {
     this.connection.end(console.error);
   }
   startTransaction() {
-    return this.query('START TRANSACTION');
+    //We need to ensure that we are using the same connection during the whole transaction
+    if(this.inTransaction) return Promise.reject('You already started a transaction. Call `commit()` or `rollback()` to terminate it.');
+    return new Promise((resolve, reject) => {
+      this.pool.getConnection((err, connection) => {
+        if(err) reject(err);
+        this.connection = connection;
+        this.inTransaction = true;
+        return this.query('START TRANSACTION').then(resolve).catch(reject);
+      });
+    });
   }
   commit() {
-    return this.query('COMMIT');
+    if(!this.inTransaction) return Promise.reject('You must start a transaction with `startTransaction()` before being able to commit it.');
+    return this.query('COMMIT').then(() => {
+      this.connection.release();
+      this.connection = this.pool;
+      this.inTransaction = false;
+    });
   }
   rollback() {
-    return this.query('ROLLBACK');
+    if(!this.inTransaction) return Promise.reject('You must start a transaction with `startTransaction()` before being able to roll it back.');
+    return this.query('ROLLBACK').then(() => {
+      this.connection.release();
+      this.connection = this.pool;
+      this.inTransaction = false;
+    });
   }
   get({table, search, where, offset, limit}) {
     if(!search.length) return Promise.resolve({});
@@ -190,27 +215,19 @@ const lengthRequired = ['string'];
 
 module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host = 'localhost', connectionLimit = 100, ...parameters}) => {
   return Promise.resolve().then(() => {
+    const pool = mysql.createPool({...parameters, connectionLimit, host });
+    const driver = new Driver(pool);
     if(create) {
-      //Create an initial connection and driver to create the database
-      const connection = mysql.createConnection({...parameters, database});
-      return new Promise((resolve, reject) => {
-        connection.connect(err => {
-          if(err) reject(err);
-          else resolve(new Driver(connection));
-        });
-      }).then(driver =>
-        //Destroy previous database if required
-        driver.query(`DROP DATABASE IF EXISTS ${database}`)
-          //Create the database
-          .then(() => driver.query(`CREATE DATABASE IF NOT EXISTS ${database} CHARACTER SET ${charset}`))
-          //Destroy single connection
-          .then(() => connection.destroy())
-          .then(() => console.log('\x1b[32m%s\x1b[0m', `Brand new ${database} database successfully created!`))
-      );
-    }
+      //Destroy previous database if required
+      return driver.query(`DROP DATABASE IF EXISTS ${database}`)
+        //Create the database
+        .then(() => driver.query(`CREATE DATABASE IF NOT EXISTS ${database} CHARACTER SET ${charset}`))
+        .then(() => console.log('\x1b[32m%s\x1b[0m', `Brand new ${database} database successfully created!`))
+        .then(() => driver);
+    } else return driver;
   })
-    //Create connection with pool
-    .then(() => mysql.createPool({...parameters, database, connectionLimit, host }))
-    //Create the driver with the new connection
-    .then(pool => new Driver(pool));
+    //Enter the database and returns the driver
+    .then(driver => driver.query(`USE ${database}`)
+      .then(() => driver)
+    );
 };

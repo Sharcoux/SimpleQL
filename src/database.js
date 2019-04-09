@@ -1,9 +1,12 @@
 const readline = require('readline');
-const { isPrimitive, classifyData, classifyRequestData } = require('./utils');
+const { isPrimitive, classifyRequestData } = require('./utils');
 const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED } = require('./errors');
+const { prepareTables, prepareRules } = require('prepare');
 
 class Database {
   constructor({tables, tablesModel, driver, rules = {}, preprocessing = {}, privateKey}) {
+    //We pre-configure the rules for this database
+    prepareRules({rules, tables, privateKey, query : request => this.request(privateKey, request)});
     this.tables = tables;
     this.driver = driver;
     this.rules = rules;
@@ -13,6 +16,7 @@ class Database {
 
     this.findInTable = this.findInTable.bind(this);
     this.applyInTable = this.applyInTable.bind(this);
+    this.request = this.request.bind(this);
   }
   /**
    * Resolve a full simple-QL request
@@ -78,8 +82,8 @@ class Database {
   }
 }
 
-function createTables(driver, tables, create) {
-  //Create the tables if needed
+/** Create the table model that will be used for all requests */
+function createTables({driver, tables, create}) {
   const data = prepareTables(tables);
   //We retrieve foreign keys from the prepared table. All tables need to be created before adding foreign keys
   const foreignKeys = Object.keys(data).reduce((acc, tableName) => {
@@ -87,6 +91,7 @@ function createTables(driver, tables, create) {
     delete data[tableName].foreignKeys;
     return acc;
   }, {});
+  //Create the tables if needed
   if(create) return Promise.all(Object.keys(data).map(tableName => {
     //We retrieve tables indexes from the prepared table
     const index = data[tableName].index;
@@ -97,72 +102,7 @@ function createTables(driver, tables, create) {
   return Promise.resolve(data);
 }
 
-/** transform tables into sql data types
- * author = User is transformed into authorId = 'integer/10';
- * contacts = [User] creates a new table contactsUser = {userId : 'integer/10', contactsId : 'integer/10'}
-*/
-function prepareTables(tables) {
-  //We add the table name into each table data
-  Object.keys(tables).forEach(tableName => tables[tableName].tableName = tableName);
-  //We add the reservedId props
-  const reservedId = {type : 'integer', length: 10, unsigned: true, autoIncrement : true};
-  Object.keys(tables).forEach(tableName => tables[tableName].reservedId = reservedId);
-  //We transform the tables into a valid data model
-  return Object.keys(tables).reduce((acc, tableName) => {
-    const table = tables[tableName];
-    const { empty, primitives, objects, arrays } = classifyData(table);
-    console.log(tableName, primitives);
 
-    if(empty.length) throw new Error(`The fields ${empty.join(', ')} do not have a value.`);
-    acc[tableName] = {}; //Create table entry
-
-    //Add the indexes
-    if(table.index) acc[tableName].index = table.index;
-    //We need to remove 'index' from the objects
-    objects.splice(objects.indexOf('index', 1));
-    //Add primitives constraints
-    primitives.forEach(key => acc[tableName][key] = table[key]);
-    //Transforme author = User into authorId = 'integer/10';
-    objects.forEach(key => {
-      acc[tableName][key+'Id'] = {
-        type: 'integer',
-        length : 10,
-        unsigned : true,
-      };
-      //We need to change the index accordingly
-      if(acc[tableName].index && acc[tableName].index.hasOwnProperty(key)) {
-        throw new Error(`indexes on keys referencing foreign tables will be ignored. Please remove index ${key} from table ${tableName}.`);
-        // acc[tableName].index[key+'Id'] = acc[tableName].index[key];
-        // delete acc[tableName].index[key];
-      }
-      acc[tableName].foreignKeys = {
-        [key+'Id'] : table[key].tableName,
-      };
-    });
-    //Create an association table. contacts = [User] creates a map contactsUser = {userId : 'integer/10', contactsId : 'integer/10'}
-    arrays.forEach(key => {
-      const name = key+tableName;
-      acc[name] = {
-        reservedId,
-        [tableName+'Id'] : {
-          type: 'integer',
-          length : 10,
-          unsigned : true,
-        },
-        [key+'Id']: {
-          type: 'integer',
-          length : 10,
-          unsigned : true,
-        },
-        foreignKeys: {
-          [tableName+'Id'] : tableName,
-          [key+'Id'] : table[key][0].tableName,
-        },
-      };
-    });
-    return acc;
-  }, {});
-}
 
 /** Load the driver according to database type, and create the database connection, and the database itself if required */
 function createDatabase({tables, database, rules, preprocessing = {}}) {
@@ -175,7 +115,7 @@ function createDatabase({tables, database, rules, preprocessing = {}}) {
         output: process.stdout
       });
       return new Promise((resolve, reject) =>
-        rl.question(`Are you sure that you wish to completely erase any previous database called ${database} (y/N)\n`, answer => {
+        rl.question(`Are you sure that you wish to completely erase any previous database called ${database.database} (y/N)\n`, answer => {
           rl.close();
           answer==='y' ? resolve() : reject('If you don\'t want to erase the database, remove the "create" property from the "database" object.');
         })
@@ -188,7 +128,7 @@ function createDatabase({tables, database, rules, preprocessing = {}}) {
       if(!createDriver) return Promise.reject(`${database.type} is not supported right now. Try mysql for instance.`);
       //create the server
       return createDriver(database)
-        .then(driver => createTables(driver, tables, database.create)
+        .then(driver => createTables({driver, tables, create: database.create})
           .then(tablesModel => new Database({tables, tablesModel, driver, rules, privateKey: database.privateKey, preprocessing})));
     });
 }
