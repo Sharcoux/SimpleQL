@@ -1,3 +1,5 @@
+const { BAD_REQUEST } = require('../errors');
+
 function isPrimitive(value) {
   return value!==undefined && value!==Object(value);
 }
@@ -5,6 +7,12 @@ function isPrimitive(value) {
 /** Returns the intersection between array1 and array2 */
 function restrictContent(array1, array2) {
   return array1.filter(elt => array2.includes(elt));
+}
+
+/** Resolve if any of the promises resolves. */
+function any(promises) {
+  const reverse = promise => new Promise((resolve, reject) => promise.then(reject, resolve));
+  return reverse(Promise.all(promises.map(reverse)));
 }
 
 function stringify(data) {
@@ -53,7 +61,7 @@ function classifyData(object) {
 }
 
 /** Classify request fields of a request inside a table into 4 categories
- * - request : the request restricted to only the fields defined in the tables
+ * - request : the request where `get : '*'` would have been replaced by the table's columns
  * - search : keys whose value is present but undefined
  * - primitives : keys which are a column of the table
  * - objects : keys that reference an object in another table (key+'Id' is a column inside the table) 
@@ -65,15 +73,31 @@ function classifyRequestData(request, table) {
 
   //We allow using '*' to mean all columns
   if(request.get==='*') request.get = [...tableData.primitives];
+  //get must be an array by now
+  if(request.get && !(request.get instanceof Array)) throw {
+    name : BAD_REQUEST,
+    message : `get property must be an array of string in table ${table.tableName} in request ${JSON.stringify(request)}.`,
+  };
+  //If the object or array key appears in the get instruction, we consider that we want to retrieve all the available data.
+  if(request.get) restrictContent([...tableData.objects, ...tableData.arrays], request.get).forEach(key => {
+    if(request[key]) throw {
+      name : BAD_REQUEST,
+      message : `In table ${table.tableName}, the request cannot contain value ${key} both in the 'get' instruction and in the request itself.`,
+    };
+    request[key] = { get : '*'};
+  });
+
   //We restrict the request to only the field declared in the table
   //fields that we are trying to get info about
   const search = restrictContent(request.get || [], tableData.primitives);
+
+  
   //constraints for the research
   const [primitives, objects, arrays] = ['primitives', 'objects', 'arrays'].map(key => restrictContent(tableData[key], Object.keys(request)));
   return { request, search, primitives, objects, arrays };
 }
 
-const reservedKeys = ['reservedId', 'set', 'get', 'delete', 'create', 'add', 'remove', 'not', 'like', 'or', 'limit', 'offset', 'tableName', 'foreignKeys', 'type', 'parent'];
+const reservedKeys = ['reservedId', 'set', 'get', 'created', 'deleted', 'delete', 'create', 'add', 'remove', 'not', 'like', 'or', 'limit', 'offset', 'tableName', 'foreignKeys', 'type', 'parent', 'index'];
 const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', '~', '!'];
 
 module.exports = {
@@ -84,4 +108,5 @@ module.exports = {
   classifyRequestData,
   reservedKeys,
   operators,
+  any,
 };

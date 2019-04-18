@@ -26,11 +26,10 @@ class Driver {
   }
   query(query, trials = 3) {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(`timeout for requet ${query}`), 300000);
+      const timeout = setTimeout(() => reject(`timeout for requet ${query}`), 3000);
       console.log(`Executing ${query}`);
       log_file.write(query+';\n');
       this.connection.query(query+';', (error, results) => {
-        if(results instanceof Array) console.log('results', results);
         clearTimeout(timeout);
         if (error) reject(error);
         resolve(results);
@@ -109,7 +108,7 @@ class Driver {
     const query = createQuery(`UPDATE TABLE ${ei(table)} SET ${setQuery}`, where);
     return this.query(query);
   }
-  createTable({table = '', data = {}, index = {}}) {
+  createTable({table = '', data = {}, index = []}) {
     const columnsKeys = Object.keys(data).filter(key => key!=='index');
     const columns = columnsKeys.map(name => {
       if(Object(data[name]) instanceof String) {
@@ -132,15 +131,18 @@ class Driver {
     const missingLength = columnsKeys.find(name => !data[name].length);
     if(missingLength && lengthRequired.includes(data[missingLength].type)) return Promise.reject(`You need to specify the column length for key ${missingLength} in table ${table}. You provided : ${JSON.stringify(data[missingLength])}.`);
     //Create indexes
-    const indexes = Object.keys(index).map(key => {
-      const details = (index[key] || '').split('/');
-      const length = details.find(d => !isNaN(d));
-      const status = details.find(isNaN);
-      const writeStatus = status ? status.toUpperCase()+' ' : '';
-      const writeLength = length ? '(' + length + ')' : '';
-      const indexValues = [undefined, 'unique', 'fulltext', 'spatial'];
-      if(!indexValues.includes(status)) throw new Error(`You specified ${status} as index value for key ${key} in table ${table} which is not a recognized value. Recognized values are ${JSON.stringify(indexValues)}`);
-      return `, ${writeStatus}INDEX I_${table}_${key} (${key}${writeLength})`;
+    const indexes = index.map(elt => {
+      const type = elt.type ? elt.type.toUpperCase()+' ' : '';
+      if(!elt.column) throw new Error(`No column was defined for index ${elt} in table ${table}.`);
+      if(elt.column instanceof Array) {
+        if(elt.length && (!(elt.length instanceof Array) || elt.length.length!==elt.column.length)) throw new Error(`length in index definition of table ${table} must be an array matching the column array.`);
+        const indexName = `I_${table}${elt.column.map(column => '_'+column).join('')}`;
+        const columns = elt.column.map((column, i) => column + (elt.length ? `(${elt.length[i]})` : '')).join(', ');
+        return `, ${type}INDEX ${indexName} (${columns})`;
+      } else {
+        const column = elt.column + (elt.length ? `(${elt.length})` : '');
+        return `, ${type}INDEX I_${table}_${elt.column} (${column})`;
+      }
     });
     //Create the table
     return this.query(`CREATE TABLE IF NOT EXISTS ${table} (
@@ -211,23 +213,23 @@ function convertType(type) {
   }
 }
 
-const lengthRequired = ['string'];
+const lengthRequired = ['string', 'varchar'];
 
 module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host = 'localhost', connectionLimit = 100, ...parameters}) => {
   return Promise.resolve().then(() => {
+    if(!create) return Promise.resolve();
+    //Instantiate a connection to create the database
     const pool = mysql.createPool({...parameters, connectionLimit, host });
     const driver = new Driver(pool);
-    if(create) {
-      //Destroy previous database if required
-      return driver.query(`DROP DATABASE IF EXISTS ${database}`)
-        //Create the database
-        .then(() => driver.query(`CREATE DATABASE IF NOT EXISTS ${database} CHARACTER SET ${charset}`))
-        .then(() => console.log('\x1b[32m%s\x1b[0m', `Brand new ${database} database successfully created!`))
-        .then(() => driver);
-    } else return driver;
+    //Destroy previous database if required
+    return driver.query(`DROP DATABASE IF EXISTS ${database}`)
+      //Create the database
+      .then(() => driver.query(`CREATE DATABASE IF NOT EXISTS ${database} CHARACTER SET ${charset}`))
+      .then(() => console.log('\x1b[32m%s\x1b[0m', `Brand new ${database} database successfully created!`));
   })
     //Enter the database and returns the driver
-    .then(driver => driver.query(`USE ${database}`)
-      .then(() => driver)
-    );
+    .then(() => {
+      const pool = mysql.createPool({...parameters, database, connectionLimit, host });
+      return new Driver(pool);
+    });
 };

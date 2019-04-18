@@ -1,29 +1,29 @@
-const { restrictContent, classifyRequestData } = require('./utils');
+const { any, classifyData } = require('./utils');
 const { DATABASE_ERROR } = require('./errors');
 
 /** Rule that enables anyone */
 function all() {
-  return () => true;
+  return () => Promise.resolve();
 }
 
 /** No one is enabled by this rule, except if the privateKey is provided as a authId */
 function none({privateKey}) {
-  return ({authId}) => authId===privateKey;
+  return ({authId}) => authId===privateKey ? Promise.resolve() : Promise.reject('None rule');
 }
 
 /** Product of provided rules */
 function and(...rules) {
-  return preParams => params => rules.every(rule => rule(preParams)(params));
+  return preParams => params => Promise.all(rules.map(rule => rule(preParams)(params)));
 }
 
 /** Union of provided rules */
 function or(...rules) {
-  return preParams => params => rules.some(rule => rule(preParams)(params));
+  return preParams => params => any(rules.map(rule => rule(preParams)(params)));
 }
 
 /** Rule that enables anyone that doesn't fulfill the provided rule */
 function not(rule) {
-  return preParams => params => !rule(preParams)(params);
+  return preParams => params => new Promise((resolve, reject) => rule(preParams)(params).then(reject, resolve));
 }
 
 /** If this rule is used, the inner rules will now apply to the request instead of the database */
@@ -54,70 +54,74 @@ function getTargetObject(object, field) {
 
 /** Enable only the users whose id matches the denoted field value (relative or absolute) */
 function is(field) {
-  return ({tables, table}) => ({authId, request, object, requestFlag}) => {
+  if(!field || !(Object(field) instanceof String)) return Promise.reject('`is` rule expects its parameter to be a string matching a field or a table. Please refer to the documentation.');
+  return () => ({authId, request, object, requestFlag}) => {
     if(requestFlag) {
       const target = getObjectInRequest(request, field);
-      return target && target.reservedId === authId;
+      return target && target.reservedId === authId ? Promise.resolve() : Promise.reject(`is(${field}) rule`);
     }
     if(field==='self') {
-      return object.reservedId === authId;
+      return object.reservedId === authId ? Promise.resolve() : Promise.reject('is(self) rule');
     }
     const target = getTargetObject(object, field);
-    return target && target.reservedId === authId;
+    return target && target.reservedId === authId ? Promise.resolve() : Promise.reject(`is(${field}) rule`);
   };
 }
 
 /** Enable only the users that are a member of the denoted field list. The field can be relative or absolute. */
 function member(field) {
-  return ({tables, table, query}) => ({authId, object, tables, tableName, request, requestFlag, tableRequest, driver}) => {
+  if(!field || !(Object(field) instanceof String)) return Promise.reject('`member` rule expects its parameter to be a string matching a field or a table. Please refer to the documentation.');
+  return ({tables, tableName}) => ({authId, object, request, requestFlag, query}) => {
     if(requestFlag) {
       const members = getObjectInRequest(request, field);
-      return members.map(member => member.reservedId).includes(authId);
+      return members.map(member => member.reservedId).includes(authId) ? Promise.resolve() : Promise.reject(`member(${field}) rule`);
     } else {
-      const target = getTargetObject(object, field);
-        if(!(value instanceof Array)) {
-          throw {
-            type: DATABASE_ERROR,
-            message: `You cannot use member rule on ${field} in ${tableName} as it is not an array.`,
-          };
-        }
-        return driver.get({
-          table: tableName,
-          search : ['reservedId'],
-          where : {
-            [tableName+'Id'] : object.reservedId,
-            [field+'Id'] : authId,
-          },
-        }).then(results => results.length>0);
-      } else {
-        const fields = field.split('.');
-        if(fields.length===1) {
-          //We are looking into the whole table
-          return driver.get({
-            table: field,
-            search : ['reservedId'],
-            where : {
-              reservedId : authId,
-            },
-          }).then(results => results.length>0);
-        } else {
-          //We are looking for a specific field into another table
-          if(!(value instanceof Array)) {
-            return Promise.reject({
-              type: DATABASE_ERROR,
-              message: `You cannot use member rule on ${fields[1]} in ${fields[0]} as it is not an array.`,
-            });
+      //We are looking inside the object result
+      if(tables[tableName][field]) {
+        return query({
+          [tableName] : {
+            reservedId : object.reservedId,
+            [field] : { get : ['reservedId']}
           }
-          return driver.get({
-            table: fields[0],
-            search : ['reservedId'],
-            where : {
-              [fields[1]+'Id'] : object.reservedId,
-              [tables[fields[0]]+'Id'] : authId,
-            },
-          }).then(results => results.length>0);
-        }
+        }, { admin : true, readOnly : true }).then(({[tableName] : results}) => {
+          if(!results.find(result => result.reservedId === authId)) return Promise.reject(`member(${field}) rule`);
+          return Promise.resolve();
+        });
       }
+      const target = getTargetObject(object, field);
+      if(target) {
+        if(!(target instanceof Array)) {
+          return Promise.reject({
+            name: DATABASE_ERROR,
+            message: `You cannot use member rule on ${field} in ${tableName} as it is not an array.`,
+          });
+        }
+        return target.map(element => element.reservedId).includes(authId) ? Promise.resolve() : Promise.reject(`member(${field}) rule`);
+      }
+      //We try to look into the whole table
+      const [tName, property] = field.split('.');
+      const table = tables[tName];
+      if(!table) {
+        return Promise.reject({
+          name : DATABASE_ERROR,
+          message : `The field ${field} was not found in the resulting object ${JSON.stringify(object)} in table ${tableName}, nor in the tables.`,
+        });
+      }
+      const { objects } = classifyData(table);
+      if(property && !objects.includes(property)) {
+        return Promise.reject({
+          name : DATABASE_ERROR,
+          message : `The field ${property} was not found in the table ${tName} in the 'member' rule specified in table ${tableName}.`,
+        });
+      }
+      const targetField = property || 'reservedId';
+      return query({
+        [table] : { get: [targetField]},
+      }).then(results => {
+        results.map(result => property ? result.property.reservedId : result.reservedId);
+      })
+        .then(results => results.includes(authId ? Promise.resolve() : Promise.reject(`member(${field}) rule`)));
+    }
   };
 }
 

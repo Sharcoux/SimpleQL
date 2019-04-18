@@ -12,7 +12,10 @@ type, length, nullable, unsigned, defaultValue, autoIncrement,
 createServer({port = 443, login = {login: 'email', password: 'password', salt: null, userTable: 'User'}, tables, database, rules, preprocessing, middlewares = [] }
 types:
 'string', 'integer', 'float', 'double', 'decimal', 'date', 'dateTime', 'boolean', 'text', 'binary'
-
+index:
+pas de tableaux dans la forme string
+plugin:
+['middleware', 'onRequest', 'onCreation', 'onDeletion', 'onResult', 'preRequisite', 'errorHandler'];
 ## Getting Started
 
 ## Installation

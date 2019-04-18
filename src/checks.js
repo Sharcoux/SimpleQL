@@ -6,21 +6,17 @@ const { stringify, classifyData, reservedKeys } = require('./utils');
 /** Check that the tables that are going to be created are valid */
 function checkTables(tables) {
   const acceptedTypes = ['string', 'integer', 'float', 'double', 'decimal', 'date', 'dateTime', 'boolean', 'text', 'binary'];
-  const forbiddenNames = ['login', 'password', 'token'];
-
-  //check keys
-  if(Object.keys(tables).find(key => forbiddenNames.includes(key))) return Promise.reject(`Tables name cannot belong to ${forbiddenNames.join(', ')}`);
   //check values
   return Promise.all(Object.keys(tables).map(tableName => {
     const table = tables[tableName];
-    return Promise.all(reservedKeys.map(field => table[field] ? Promise.reject(`${field} is a reserved field`) : Promise.resolve()))
+    return Promise.all(reservedKeys.map(field => (field!=='index' && table[field]) ? Promise.reject(`${field} is a reserved field`) : Promise.resolve()))
       .then(() => Promise.all(Object.keys(table).map(field => checkField(tableName, field, table[field]))));
   }));
 
   /** Check that the field value is valid */
   function checkField(tableName, field, value) {
     if(field==='index') {
-      if(!(value instanceof Object)) return Promise.reject(`Field 'index' in ${tableName} must be an object where keys are the columns, and value can be 'unique' or undefined`);
+      if(!(value instanceof Array) && !(Object(value) instanceof String)) return Promise.reject(`Field 'index' in ${tableName} must be an array containing objects where keys are 'column', 'type' and 'length', or a string separing these values with a '/'.`);
       return Promise.resolve();
     }
     if(Object.keys(tables).includes(field)) return Promise.reject(`Field ${field} in ${tableName} cannot have the same name as a table.`);
@@ -117,17 +113,30 @@ function checkRules(rules, tables) {
     )));
 }
 
-function checkPreprocessing(preprocessing, tables) {
-  if(!(preprocessing instanceof Object)) return Promise.reject('preprocessing should be an object');
-  const undefinedKey = Object.keys(preprocessing).find(key => !Object.keys(tables).includes(key));
-  if(undefinedKey) return Promise.reject(`${undefinedKey} is not one of the defined tables. Preprocessing should only contains existing tables.`);
-  const notFunction = Object.keys(preprocessing).find(key => !(preprocessing[key] instanceof Function));
-  if(notFunction) return Promise.reject(`${notFunction} is not a function in preprocessing object.`);
+/** Check that all provided plugins are well formed. */
+function checkPlugins(plugins, tables) {
+  const pluginKeys = ['middleware', 'onRequest', 'onCreation', 'onDeletion', 'onResult', 'preRequisite', 'errorHandler'];
+  if(!(plugins instanceof Array)) return Promise.reject(`plugins should be an array. But we received ${JSON.stringify(plugins)}.`);
+  return Promise.all(plugins.map(plugin => {
+    return Promise.all(Object.keys(plugin).map(key => {
+      if(!pluginKeys.includes(key)) return Promise.reject(`Plugins can only contain these functions: ${pluginKeys}, but we found ${key}.`);
+      if(key === 'middleware') {
+        if(!(plugin[key] instanceof Function)) return Promise.reject(`${key} should be a function in your plugin. But we received ${JSON.stringify(plugin[key])}.`);
+      } else {
+        //case preprocessing and postprocessing
+        if(!(plugin[key] instanceof Object)) return Promise.reject(`${key} should be an object in your plugin. But we received ${JSON.stringify(plugin[key])}.`);
+        return Promise.all(Object.keys(plugin[key]).map(table => {
+          if(!Object.keys(tables).includes(table)) return Promise.reject(`${table} is not one of the defined tables. ${key} should only contains existing tables as keys.`);
+          if(!(plugin[key][table] instanceof Function)) return Promise.reject(`${table} is not a function. ${key} should only contains functions as values.`);
+        }));
+      }
+    }));
+  }));
 }
 
-module.exports = ({tables, database, rules, preprocessing}) => {
+module.exports = ({tables, database, rules, plugins}) => {
   return checkTables(tables)
     .then(() => checkDatabase(database))
     .then(() => checkRules(rules, tables))
-    .then(() => checkPreprocessing(preprocessing, tables));
+    .then(() => checkPlugins(plugins, tables));
 };
