@@ -10,9 +10,9 @@ function restrictContent(array1, array2) {
 }
 
 /** Resolve if any of the promises resolves. */
-function any(promises) {
+function any(funcs) {
   const reverse = promise => new Promise((resolve, reject) => promise.then(reject, resolve));
-  return reverse(Promise.all(promises.map(reverse)));
+  return reverse(sequence(funcs.map(func => () => reverse(func()))));
 }
 
 function stringify(data) {
@@ -22,6 +22,11 @@ function stringify(data) {
   else return data+'';
 }
 
+/** Resolve each promise sequentially. */
+function sequence(funcs) {
+  const L = [];
+  return funcs.reduce((chaine, func) => chaine.then(func).then(result => L.push(result)), Promise.resolve()).then(() => L);
+}
 
 /** Classify the object props into 5 arrays:
  * - empty : keys whose value is present but undefined or null
@@ -90,7 +95,6 @@ function classifyRequestData(request, table) {
   //We restrict the request to only the field declared in the table
   //fields that we are trying to get info about
   const search = restrictContent(request.get || [], tableData.primitives);
-
   
   //constraints for the research
   const [primitives, objects, arrays] = ['primitives', 'objects', 'arrays'].map(key => restrictContent(tableData[key], Object.keys(request)));
@@ -109,4 +113,5 @@ module.exports = {
   reservedKeys,
   operators,
   any,
+  sequence,
 };

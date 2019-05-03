@@ -1,5 +1,5 @@
 const mysql = require('mysql');
-const { isPrimitive, operators } = require('../utils');
+const { isPrimitive, operators, sequence } = require('../utils');
 var fs = require('fs');
 var log_file = fs.createWriteStream(__dirname + '/debug.log', {flags : 'w'});
 
@@ -76,7 +76,7 @@ class Driver {
     let query = createQuery(`SELECT ${search.map(s => ei(s)).join(', ')} FROM ${ei(table)}`, where);
     if(offset) query += ` OFFSET ${es(parseInt(offset, 10))}`;
     if(limit) query += ` LIMIT ${es(parseInt(limit, 10))}`;
-    return this.query(query).then(results => results instanceof Array ? results : [results]);
+    return this.query(query).then(results => console.log(JSON.stringify(results)) || results instanceof Array ? results : [results]);
   }
   delete({table, where}) {
     const query = createQuery(`DELETE FROM ${ei(table)}`, where);
@@ -84,8 +84,20 @@ class Driver {
   }
   create({table, elements}) {
     if(!elements) return Promise.resolve();
-    const list = elements instanceof Array ? elements : [elements];
-    return Promise.all(list.map(element => {
+    let list = elements instanceof Array ? elements : [elements];
+    //For each property provided as an array, we duplicate the elements to be created. {a : [1, 2]} becomes [{a: 1}, {a : 2}].
+    [...list].forEach(elt => {
+      Object.keys(elt).forEach(key => {
+        const val = elt[key];
+        if(val instanceof Array) {
+          const L = [];
+          val.forEach(v => list.forEach(e => L.push({...e, [key] : v})));
+          list = L;
+        }
+      });
+    });
+    
+    return sequence(list.map(element => () => {
       const query = `INSERT INTO ${ei(table)} (
         ${Object.keys(element).map(k => ei(k)).join(', ')}
       ) VALUES (
@@ -105,7 +117,7 @@ class Driver {
       const value = values[key];
       return `${ei(key)}=${this._escapeValue(table, key, value)}`;
     }).join(', ');
-    const query = createQuery(`UPDATE TABLE ${ei(table)} SET ${setQuery}`, where);
+    const query = createQuery(`UPDATE ${ei(table)} SET ${setQuery}`, where);
     return this.query(query);
   }
   createTable({table = '', data = {}, index = []}) {

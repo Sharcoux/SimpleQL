@@ -11,6 +11,12 @@ module.exports = {
   errors,
 };
 
+// process.on('unhandledRejection', (reason, p) => {
+//   console.log('Unhandled Rejection at: Promise', p, 'reason:', reason);
+//   console.error(reason.stack);
+//   // application specific logging, throwing an error, or other logic here
+// });
+
 function createServer({port = 443, tables = {}, database = {}, rules = {}, plugins = [], middlewares = [], errorHandler}) {
   const allMiddlewares = plugins.map(plugin => plugin.middleware).filter(mw => mw).concat(middlewares);
   const errorHandlers = plugins.map(plugin => plugin.errorHandler).filter(mw => mw);

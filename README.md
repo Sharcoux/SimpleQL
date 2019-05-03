@@ -16,6 +16,9 @@ index:
 pas de tableaux dans la forme string
 plugin:
 ['middleware', 'onRequest', 'onCreation', 'onDeletion', 'onResult', 'preRequisite', 'errorHandler'];
+
+Delete cascade for objects referring to an object being deleted. To avoid that, manually set the reference to null before the deletion.
+
 ## Getting Started
 
 ## Installation

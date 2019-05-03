@@ -1,7 +1,8 @@
 const readline = require('readline');
-const { isPrimitive, classifyRequestData } = require('./utils');
+const { isPrimitive, classifyRequestData, operators, sequence } = require('./utils');
 const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, DATABASE_ERROR } = require('./errors');
 const { prepareTables, prepareRules } = require('./prepare');
+const { magenta } = require('./utils/colors');
 
 /** Load the driver according to database type, and create the database connection, and the database itself if required */
 function createDatabase({tables, database, rules = {}, plugins = []}) {
@@ -60,7 +61,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
   function resolve(request, local = {}) {
     //We keep only the requests where objects requested are described inside a table
     const keys = Object.keys(request).filter(key => tables[key]);
-    return Promise.all(keys.map(key => resolveInTable({tableName : key, request : request[key], local})))
+    return sequence(keys.map(key => () => resolveInTable({tableName : key, request : request[key], local})))
       //We associate back the results to each key
       .then(results => keys.reduce((acc, key, index) => {acc[key] = results[index]; return acc;}, {}));
   }
@@ -79,7 +80,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
     });
     //If an array is provided, we concatenate the results of the requests
     if(request instanceof Array) {
-      return Promise.all(request.map(part => resolveInTable({tableName, request : part, parentRequest, local})))
+      return sequence(request.map(part => () => resolveInTable({tableName, request : part, parentRequest, local})))
         //[].concat(...array) will flatten array.
         .then(results => [].concat(...results));
       //Removes duplicates
@@ -99,12 +100,12 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
         local[key] = value;
       }
   
-      return Promise.all(plugins
+      return sequence(plugins
         .filter(plugin => plugin[event])
         .map(plugin => plugin[event])
         .filter(pluginOnEvent => pluginOnEvent[tableName])
         .map(pluginOnEvent => pluginOnEvent[tableName])
-        .map(callback => callback(data, {parent : parentRequest, query, update, isAdmin : local.authId === privateKey}))
+        .map(callback => () => callback(data, {parent : parentRequest, query, update, isAdmin : local.authId === privateKey}))
       );
     }
 
@@ -121,7 +122,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
     //Function used to execute a request into the database tables
     function applyInTable(req, tName) {
-      return resolveInTable({local, tableName : tName || tableName, request : req, parentRequest : {...request, parent : parentRequest}});
+      return resolveInTable({local, tableName : tName || tableName, request : req, parentRequest : {...request, tableName, parent : parentRequest}});
     }
 
     function query(request, { readOnly, admin } = { readOnly : false, admin : false }) {
@@ -171,7 +172,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
       //If this request is authenticated with the privateKey, we don't need to check integrity.
       if(local.authId === privateKey) return Promise.resolve();
 
-      console.log('\x1b[35m%s\x1b[0m', 'integrityCheck');
+      console.log(magenta, 'integrityCheck');
 
       /** Check if the values in the request are acceptable. */
       function checkEntry(req, primitives, objects, arrays) {
@@ -183,7 +184,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           //This is the way to represent OR condition
           if(value instanceof Array) return Promise.all(value.map(v => isValue(v, key)));
           //This is the way to create a AND condition
-          if(value instanceof Object) return Promise.all(Object.values(value).map(v => isValue(v, key)));
+          if(value instanceof Object) return Promise.all(Object.keys(value).map(k => operators.includes(k) && isValue(value[k], key)));
           return Promise.reject({
             name : BAD_REQUEST,
             message : `Bad value ${value} provided for field ${key} in table ${tableName}. We expect null, a ${tablesModel[key]}, an object, or an array of these types.`
@@ -198,6 +199,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           });
         }
 
+        //Check if the values are acceptable for primitives, objects and arrays
         return Promise.all(primitives.map(key => isValue(req[key], key)))
           .then(() => Promise.all([...objects, ...arrays].map(key => isObject(req[key], key))));
       }
@@ -205,12 +207,14 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
       return checkEntry(request, primitives, objects, arrays)
         .then(() => {
+          //Only one instructions among create, delete, get in each request
           if(!!request.create + !!request.delete + !!request.get > 1) {
             return Promise.reject({
               name : BAD_REQUEST,
               message : `Each request can contain only one among 'create', 'delete' or 'get'. The request was : ${JSON.stringify(request)}.`,
             });
           }
+          //Check that set instruction is acceptable
           if(request.set) {
             if(request.set instanceof Array || !(request instanceof Object)) return Promise.reject({
               name : BAD_REQUEST,
@@ -219,11 +223,14 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             const { primitives : setPrimitives, objects : setObjects, arrays : setArrays } = classifyRequestData(request.set, table);
             return checkEntry(request.set, setPrimitives, setObjects, setArrays);
           }
-          if(request.create) {
+          //Cannot add or remove elements from arrays in create or delete requests
+          if(request.create || request.delete) {
             const addOrRemove = arrays.find(key => request[key].add || request[key].remove);
+            const message = request.create ? `In create requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. To add children, just write the constraints directly under ${addOrRemove}.`
+              : `In delete requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. When deleting an object, the associations with this object will be automatically removed.`;
             if(addOrRemove) return Promise.reject({
               name : BAD_REQUEST,
-              message : `In create instructions, you cannot have 'add' or 'remove' instruction in ${addOrRemove} in table ${tableName}. To add children, just write the constraints directly under ${addOrRemove}.`
+              message,
             });
           }
         });
@@ -231,11 +238,14 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
     /** We look for objects that match the request constraints and store their id into the key+Id property and add the objects into this.resolvedObjects map */
     function getObjects() {
-      console.log('\x1b[35m%s\x1b[0m', 'getObjects');
+      console.log(magenta, 'getObjects');
       //We resolve the children objects
-      return Promise.all(objects.map(key => {
+      return sequence(objects.map(key => () => {
         //Take care of null value
-        if(request[key]===null) request[key] = null;
+        if(request[key]===null) {
+          request[key] = null;
+          return Promise.resolve();
+        }
         else {
           //We get the children id and define the key+Id property accordingly
           return applyInTable(request[key], table[key].tableName).then(result => {
@@ -255,10 +265,10 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
     /** Filter the results that respond to the arrays constraints. **/
     function getChildrenArrays() {
-      console.log('\x1b[35m%s\x1b[0m', 'getChildrenArrays');
-      return Promise.all(arrays.map(key =>
+      console.log(magenta, 'getChildrenArrays');
+      return sequence(arrays.map(key =>
         //We resolve queries about arrays
-        applyInTable(request[key], table[key][0].tableName)
+        () => applyInTable(request[key], table[key][0].tableName)
           .then(arrayResults => request[key] = arrayResults)
       ));
     }
@@ -266,7 +276,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
     /** Insert elements inside the table if request.create is defined */
     function create() {
       if(!request.create) return Promise.resolve();
-      console.log('\x1b[35m%s\x1b[0m', 'create');
+      console.log(magenta, 'create');
       //TODO gérer les références internes entre créations (un message et un feed par exemple ? un user et ses contacts ?)
       return getObjects().then(getChildrenArrays).then(() => {
         const element = {};
@@ -287,7 +297,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             //Add the arrays elements found to the newly created object
             arrays.forEach(key => element[key] = request[key]);
             //Link the newly created element to the arrays children via the association table
-            return Promise.all(arrays.map(key => driver.create({
+            return sequence(arrays.map(key => () => driver.create({
               table : `${key}${tableName}`,
               elements : {
                 [tableName+'Id'] : element.reservedId,
@@ -303,24 +313,35 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
     /** Look into the database for objects matching the constraints. */
     function get() {
-      console.log('\x1b[35m%s\x1b[0m', 'get');
+      console.log(magenta, 'get');
       if(!search.includes('reservedId')) search.push('reservedId');
+      //Create the where clause
+      const where = {};
+      const searchKeys = [...search, ...objects.map(key => key+'Id')];
+      primitives.map(key => {
+        where[key] = request[key];
+        if(!searchKeys.includes(key)) searchKeys.push(key);
+      });
+      //If the data we are looking for are already provided, no need to make a request to the database
+      // if(!search.find(key => !primitives.includes(key))) return Promise.resolve([where]);
       return driver.get({
         table : tableName,
         //we will need the objects ids to retrieve the corresponding objects
-        search : [...search, ...objects.map(key => key+'Id')],
-        where : primitives.reduce((acc, key) => {acc[key] = request[key];return acc;},{}),
+        search : searchKeys,
+        where,
         limit : request.limit,
         offset : request.offset,
-      }).then(results => {
-        //We add the primitives constraints to the result object
-        results.forEach(result => primitives.forEach(key => result[key] = request[key]));
-        return results;
       });
+      // .then(results => {
+      //   //We add the primitives constraints to the result object
+      //   results.forEach(result => primitives.forEach(key => result[key] = request[key]));
+      //   return results;
+      // });
     }
 
     function resolveObjects(results) {
-      return Promise.all(objects.map(key => Promise.all(results.map(result => {
+      console.log(magenta, 'resolveObjects');
+      return sequence(objects.map(key => () => sequence(results.map(result => () => {
         request[key].reservedId = result[key+'Id'];
         return applyInTable(request[key], table[key].tableName).then(objects => {
           if(objects.length===0) return Promise.reject({
@@ -342,18 +363,19 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
     /** Filter the results that respond to the arrays constraints. **/
     function resolveChildrenArrays(results) {
-      console.log('\x1b[35m%s\x1b[0m', 'resolveChildrenArrays');
+      console.log(magenta, 'resolveChildrenArrays');
       //We keep only the arrays constraints that are truly constraints. Constraints that have keys other than 'add' or 'remove'.
       const realArrays = arrays.filter(key => Object.keys(request[key]).find(k => !['add', 'remove'].includes(k)));
-      return Promise.all(results.map(result =>
-        Promise.all(realArrays.map(key =>
+      return sequence(results.map(result =>
+        () => sequence(realArrays.map(key =>
           //We look for all objects associated to the result in the association table
-          driver.get({table : `${key}${tableName}`, search : ['reservedId'], where : {
+          () => driver.get({table : `${key}${tableName}`, search : [key+'Id'], where : {
             [tableName+'Id'] : result.reservedId,
           }})
             .then(associatedResults => {
+              if(!associatedResults.length) return [];
               //We look for objects that match all the constraints
-              request[key].reservedId = associatedResults.map(res => res.reservedId);
+              request[key].reservedId = associatedResults.map(res => res[key+'Id']);
               return applyInTable(request[key], table[key][0].tableName);
             })
             .then(arrayResults => {
@@ -363,15 +385,15 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
         ))
       ))
         //We keep only the results that have a matching solution in the table for each array's constraint
-        .then(() => results.filter(result => arrays.every(key => result[key].length)));
+        .then(() => results.filter(result => realArrays.every(key => result[key].length)));
     }
 
     /** Remove elements from the table if request.delete is defined */
     function remove(results) {
-      if(!request.delete) return Promise.resolve();
-      console.log('\x1b[35m%s\x1b[0m', 'delete');
+      if(!request.delete) return Promise.resolve(results);
+      console.log(magenta, 'delete');
       //Look for matching objects
-      driver.delete({
+      return driver.delete({
         table : tableName,
         where : {reservedId: results.map(r => r.reservedId)},
       })
@@ -384,13 +406,17 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
     /** Change the table's values if request.set is defined */
     function update(results) {
       if(!request.set) return Promise.resolve(results);
-      console.log('\x1b[35m%s\x1b[0m', 'update', results);
-      const { primitives, objects, arrays } = classifyRequestData(request.set, table);
+      console.log(magenta, 'update');
+      const { primitives : primitivesSet, objects : objectsSet, arrays : arraysSet } = classifyRequestData(request.set, table);
+      const values = {}; // The values to be edited
       //Update the results with primitives values
-      primitives.forEach(key => results.forEach(result => result[key] = request.set[key]));
+      primitivesSet.forEach(key => results.forEach(result => {
+        result[key] = request.set[key];
+        values[key] = request.set[key];
+      }));
       //Find the objects matching the constraints to be replaced
-      return Promise.all(objects.map(key =>
-        applyInTable(request.set[key], table[key].tableName)
+      return sequence(objectsSet.map(key =>
+        () => applyInTable(request.set[key], table[key].tableName)
           .then(matches => {
             if(matches.length===0) return Promise.reject({
               name: NOT_SETTABLE,
@@ -402,37 +428,25 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             });
             //Only one result
             else {
-              //Edit the request to replace objects by their ids
-              request.set[key+'Id'] = matches[0].reservedId;
-              //Update the results with found objects
-              results.forEach(result => result[key] = matches[0]);
+              //Update the results with found object values
+              results.forEach(result => {
+                result[key] = matches[0];
+                values[key+'Id'] = matches[0].reservedId;
+              });
             }
           })
       ))
         //Reduce the request to only the primitives and objects ids constraints
         .then(() => {
-          const values = {};
-          //Add the primitives to the values to be edited
-          primitives.forEach(key => values[key] = request.set[key]);
-          //Add the found objects to the values to be edited
-          objects.forEach(key => values[key+'Id'] = request.set[key+'Id'].reservedId);
           return driver.update({
             table : tableName,
             values,
             where : { reservedId : results.map(result => result.reservedId) },
           });
         })
-        //Update the database
-        .then(values => 
-        //Update the results
-        .then(() => primitives.forEach(key => results.forEach(result => result[key] = request.set[key])))
-        .then(() => objects.forEach(key => results.forEach(result => {
-          result[key] = this.resolvedObjects[request.set[key+'Id']];
-          delete result[key+'Id'];
-        })))
         
         //Replace arrays of elements by the provided values
-        .then(() => Promise.all(arrays.map(key => results.map(result =>
+        .then(() => sequence(arraysSet.map(key => () => results.map(result =>
           //Delete any previous value
           driver.delete({table : `${key}${tableName}`, where : {
             [tableName+'Id'] : result.reservedId,
@@ -453,8 +467,8 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
 
     function updateChildrenArrays(results) {
-      console.log('\x1b[35m%s\x1b[0m', 'updateChildrenArrays');
-      return Promise.all(arrays.map(key => {
+      console.log(magenta, 'updateChildrenArrays');
+      return sequence(arrays.map(key => () => {
         const { add, remove } = request[key];
         return Promise.resolve()
           //We remove elements from the association table
@@ -490,100 +504,103 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
     function controlAccess(results) {
       //If this request is authenticated with the privateKey, we don't need to control access.
       if(local.authId === privateKey) return Promise.resolve(results);
-      console.log('\x1b[35m%s\x1b[0m', 'controlAccess');
+      console.log(magenta, 'controlAccess');
       const ruleSet = rules[tableName];
 
-      return Promise.all(results.map(result => {
+      return sequence(results.map(result => () => {
         const ruleData = {authId : local.authId, request: {...request, parent : parentRequest}, object : result, query};
 
         //Read access
         return Promise.resolve().then(() => {
+          //Check table level rules
           if(ruleSet.read) return ruleSet.read(ruleData).catch(err => err);
-        }).then(err => {
-          return Promise.all(Object.keys(table).map(key => {
+        }).then(err => sequence(Object.keys(table).map(key => () => {
           //Data not requested
-            if(!result[key]) return Promise.resolve();
-            //Check property specific rules
-            return ((ruleSet[key] && ruleSet[key].read) ? ruleSet[key].read(ruleData) : Promise.resolve())
-            //Check table level rules
-              .then(() => err ? Promise.reject(err) : Promise.resolve())
-              .catch(err => {
-                console.log(`Access denied for field ${key} in table ${tableName} for authId ${local.authId}. Error : ${JSON.stringify(err)}`);
-                //Hiding sensitive data
-                result[key] = 'Access denied';
-              });
-          }))
+          if(!result[key]) return Promise.resolve();
+          //Check property specific rules
+          return Promise.resolve().then(() => {
+            if(ruleSet[key] && ruleSet[key].read) return ruleSet[key].read(ruleData);
+            else if(err) return Promise.reject(err);
+          })
+            .catch(err => {
+              console.log(`Access denied for field ${key} in table ${tableName} for authId ${local.authId}. Error : ${err.message || err}`);
+              //Hiding sensitive data
+              result[key] = 'Access denied';
+            });
+        }))
 
           //Write access
-            .then(() => {
-              if(ruleSet.write) return ruleSet.write(ruleData).catch(err => err);
-            }).then(err => {
-              //Manage set instructions
-              return Promise.resolve().then(() => {
-                if(!request.set) return Promise.resolve();
-                const { primitives : setPrimitives, objects : setObjects } = classifyRequestData(request.set, table);
-                return Promise.all([...setPrimitives, ...setObjects].map(key => {
-                  return Promise.resolve().then(() => {
-                    if(ruleSet[key] && ruleSet[key].write) return ruleSet[key].write(ruleData);
-                    else if(err) return Promise.reject(err);
-                  }).catch(err => Promise.reject({
-                    name : UNAUTHORIZED,
-                    message : `You are not allowed to edit field ${key} in table ${tableName}. Error : ${JSON.stringify(err)}`
-                  }));
+          .then(() => {
+            if(ruleSet.write) return ruleSet.write(ruleData).catch(err => err);
+          }).then(err => {
+            //Manage set instructions
+            return Promise.resolve().then(() => {
+              if(!request.set) return Promise.resolve();
+              const { primitives : setPrimitives, objects : setObjects } = classifyRequestData(request.set, table);
+              return sequence([...setPrimitives, ...setObjects].map(key =>
+                () => Promise.resolve().then(() => {
+                  if(ruleSet[key] && ruleSet[key].write) return ruleSet[key].write(ruleData);
+                  else if(err) return Promise.reject(err);
+                }).catch(err => Promise.reject({
+                  name : UNAUTHORIZED,
+                  message : `You are not allowed to edit field ${key} in table ${tableName}. Error : ${err.message || err}`
+                }))
+              ));
+            })
+          
+              //Manage create instructions
+              .then(() => {
+                if(!request.create) return Promise.resolve();
+                return Promise.resolve().then(() => {
+                  if(ruleSet.create) return ruleSet.create(ruleData);
+                  else if(err) return Promise.reject(err);
+                }).catch(err => Promise.reject({
+                  name : UNAUTHORIZED,
+                  message : `You are not allowed to create elements in table ${tableName}. Error : ${err.message || err}`
                 }));
               })
           
-              //Manage create instructions
-                .then(() => {
-                  if(!request.create) return Promise.resolve();
-                  return Promise.resolve().then(() => {
-                    if(ruleSet.create) return ruleSet.create(ruleData);
-                    else if(err) return Promise.reject(err);
-                  }).catch(err => Promise.reject({
-                    name : UNAUTHORIZED,
-                    message : `You are not allowed to create elements in table ${tableName}. Error : ${JSON.stringify(err)}`
-                  }));
-                })
-          
               //Manage delete instructions
-                .then(() => {
-                  if(!request.delete) return Promise.resolve();
-                  return Promise.resolve().then(() => {
-                    if(ruleSet.delete) return ruleSet.delete(ruleData);
-                    else if(err) return Promise.reject(err);
-                  }).catch(err => Promise.reject({
-                    name : UNAUTHORIZED,
-                    message : `You are not allowed to delete elements from table ${tableName}. Error : ${JSON.stringify(err)}`
-                  }));
-                })
+              .then(() => {
+                if(!request.delete) return Promise.resolve();
+                return Promise.resolve().then(() => {
+                  if(ruleSet.delete) return ruleSet.delete(ruleData);
+                  else if(err) return Promise.reject(err);
+                }).catch(err => Promise.reject({
+                  name : UNAUTHORIZED,
+                  message : `You are not allowed to delete elements from table ${tableName}. Error : ${err.message || err}`
+                }));
+              })
           
               //Manage add instructions
-                .then(() => Promise.all(arrays.map(key => {
-                  if(!request[key].add) return Promise.resolve();
-                  return Promise.resolve().then(() => {
-                    if(ruleSet[key] && ruleSet[key].add) return ruleSet[key].add(ruleData);
-                    else if(err) return Promise.reject(err);
-                  }).catch(err => Promise.reject({
-                    name : UNAUTHORIZED,
-                    message : `You are not allowed to create ${key} in table ${this.tableName}. Error : ${JSON.stringify(err)}`
-                  }));
-                })))
+              .then(() => sequence(arrays.map(key => () => {
+                if(!request[key].add) return Promise.resolve();
+                if(ruleSet[key] && ruleSet[key].add) ruleSet[key].add(ruleData);
+                return Promise.resolve().then(() => {
+                  if(ruleSet[key] && ruleSet[key].add) return ruleSet[key].add(ruleData);
+                  else if(err) return Promise.reject(err);
+                }).catch(err => console.error(err) || Promise.reject({
+                  name : UNAUTHORIZED,
+                  message : `You are not allowed to create ${key} in table ${tableName}. Error : ${err.message || err}`
+                }));
+              })))
           
               //Manage remove instructions
-                .then(() => Promise.all(arrays.map(key => {
-                  if(!request[key].remove) return Promise.resolve();
-                  return Promise.resolve().then(() => {
-                    if(ruleSet[key] && ruleSet[key].remove) return ruleSet[key].remove(ruleData);
-                    else if(err) return Promise.reject(err);
-                  }).catch(err => Promise.reject({
-                    name : UNAUTHORIZED,
-                    message : `You are not allowed to remove ${key} from table ${tableName}. Error : ${JSON.stringify(err)}`
-                  }));
-                })));
-            });
-        });
+              .then(() => sequence(arrays.map(key => () => {
+                if(!request[key].remove) return Promise.resolve();
+                return Promise.resolve().then(() => {
+                  if(ruleSet[key] && ruleSet[key].remove) return ruleSet[key].remove(ruleData);
+                  else if(err) return Promise.reject(err);
+                }).catch(err => Promise.reject({
+                  name : UNAUTHORIZED,
+                  message : `You are not allowed to remove ${key} from table ${tableName}. Error : ${err.message || err}`
+                }));
+              })));
+          })
+        );
         //We return only the results where access was not fully denied
-      })).then(() => results.filter(result => Object.values(result).find(value => value!=='Access denied')));
+      }))
+        .then(() => results.filter(result => Object.values(result).find(value => value!=='Access denied')));
     }
   }
 }
