@@ -3,7 +3,7 @@ const dbColumn = {
   type : 'string',
   length: 'integer',
   unsigned: 'boolean',
-  nullable: 'boolean',
+  notNull: 'boolean',
   defaultValue: '*',
   required : ['type', 'length'],
   strict : true,

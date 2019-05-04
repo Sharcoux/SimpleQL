@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const check = require('../utils/type-checking');
 const { login : loginModel , dbColumn } = require('../utils/types');
+const logger = require('../utils/logger');
 
 const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
   modulusLength: 4096,
@@ -73,7 +74,7 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
       if(token) {
         //A request is being authenticated with a JWT token
         checkJWT(token).then(decoded => (res.locals.authId = Number.parseInt(decoded.id, 10)))
-          .then(() => console.log(`${userTable} ${res.locals.authId} is making a request.`))
+          .then(() => logger('login', `${userTable} ${res.locals.authId} is making a request.`))
           .then(() => next())
           .catch(next);
       } else next();
@@ -97,7 +98,7 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
         if(request.create) {
           //Someone is trying to register. We will hash the pwd and add a salt string if required
           const { [login]: log, [password]: pass } = request;
-          console.log(log, 'is being created');
+          logger('login', log, 'is being created');
           //Missing login or password
           if(!log || !pass) return Promise.reject({
             name : BAD_REQUEST,
@@ -120,7 +121,7 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
 
         //Logging a user
         } else if(request[login] && request[password] && !request.create) {
-          console.log(request[login], 'is trying to log in');
+          logger('login', request[login], 'is trying to log in');
           //Someone is trying to log in. We retrieve their data
           const get = [password, 'reservedId'];
           if(salt) get.push(salt);//We might need the salt if required

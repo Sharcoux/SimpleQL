@@ -1,7 +1,6 @@
 const mysql = require('mysql');
 const { isPrimitive, operators, sequence } = require('../utils');
-var fs = require('fs');
-var log_file = fs.createWriteStream(__dirname + '/debug.log', {flags : 'w'});
+const log = require('../utils/logger');
 
 //Shortcuts for escaping
 /* Escaping values */
@@ -13,6 +12,7 @@ const ei = mysql.escapeId;
 class Driver {
   constructor(pool) {
     this.binaries = [];
+    this.dates = [];
     this.pool = pool;
     this.connection = pool;
     this.inTransaction = false;
@@ -23,12 +23,13 @@ class Driver {
     this.delete = this.delete.bind(this);
     this.createTable = this.createTable.bind(this);
     this._escapeValue = this._escapeValue.bind(this);
+    this._createQuery = this._createQuery.bind(this);
+    this._convertIntoCondition = this._convertIntoCondition.bind(this);
   }
   query(query, trials = 3) {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(`timeout for requet ${query}`), 3000);
-      console.log(`Executing ${query}`);
-      log_file.write(query+';\n');
+      log('database query', `Executing ${query}`);
       this.connection.query(query+';', (error, results) => {
         clearTimeout(timeout);
         if (error) reject(error);
@@ -73,13 +74,13 @@ class Driver {
   }
   get({table, search, where, offset, limit}) {
     if(!search.length) return Promise.resolve({});
-    let query = createQuery(`SELECT ${search.map(s => ei(s)).join(', ')} FROM ${ei(table)}`, where);
+    let query = this._createQuery(`SELECT ${search.map(s => ei(s)).join(', ')} FROM ${ei(table)}`, where, table);
     if(offset) query += ` OFFSET ${es(parseInt(offset, 10))}`;
     if(limit) query += ` LIMIT ${es(parseInt(limit, 10))}`;
-    return this.query(query).then(results => console.log(JSON.stringify(results)) || results instanceof Array ? results : [results]);
+    return this.query(query).then(results => log('database result', JSON.stringify(results)) || results instanceof Array ? results : [results]);
   }
   delete({table, where}) {
-    const query = createQuery(`DELETE FROM ${ei(table)}`, where);
+    const query = this._createQuery(`DELETE FROM ${ei(table)}`, where, table);
     return this.query(query);
   }
   create({table, elements}) {
@@ -110,31 +111,30 @@ class Driver {
     return value===null ? 'NULL'
       : this.binaries.includes(table+'.'+key)
         ? `0x${value.toString('hex')}`
-        : es(value);
+        : this.dates.includes(table+'.'+key)
+          ? es(new Date(value))
+          : es(value);
   }
   update({table, values, where}) {
     const setQuery = Object.keys(values).map(key => {
       const value = values[key];
       return `${ei(key)}=${this._escapeValue(table, key, value)}`;
     }).join(', ');
-    const query = createQuery(`UPDATE ${ei(table)} SET ${setQuery}`, where);
+    const query = this._createQuery(`UPDATE ${ei(table)} SET ${setQuery}`, where, table);
     return this.query(query);
   }
   createTable({table = '', data = {}, index = []}) {
     const columnsKeys = Object.keys(data).filter(key => key!=='index');
     const columns = columnsKeys.map(name => {
-      if(Object(data[name]) instanceof String) {
-        const [type, length] = data[name].split('/');
-        data[name] = { type, length };
-      }
-      const { type, length, unsigned, nullable, defaultValue, autoIncrement } = data[name];
+      const { type, length, unsigned, notNull, defaultValue, autoIncrement } = data[name];
       //We record binary columns to not escape their values during INSERT or UPDATE
       if(type==='binary') this.binaries.push(`${table}.${name}`);
+      else if(type==='date' || type==='dateTime') this.dates.push(`${table}.${name}`);
 
       let query = `${name} ${convertType(type)}`;
       if(length) query += `(${length})`;
       if(unsigned) query += ' UNSIGNED';
-      if(!nullable) query += ' NOT NULL';
+      if(notNull) query += ' NOT NULL';
       if(defaultValue) query += ` DEFAULT ${this._escapeValue(table, name, defaultValue)}`;
       if(autoIncrement) query += ' AUTO_INCREMENT';
       return query;
@@ -173,50 +173,59 @@ class Driver {
       `);
     }));
   }
+
+  _createQuery(base, where, table) {
+    if(!where || !Object.keys(where).length) return base;
+    return `${base} WHERE ${this._convertIntoCondition(where, table)}`;
+  }
+  
+  _convertIntoCondition(conditions, table, operator = '=') {
+    return Object.keys(conditions).map(key => {
+      const writeValue = (value, operator) => {
+        switch(operator) {
+          case 'ge':
+          case 'gt':
+          case 'le':
+          case 'lt':
+          case '~':
+            return `${ei(key)} ${operatorsMap[operator]} ${this._escapeValue(table, key, value)}`;
+          case '>':
+          case '<':
+          case '>=':
+          case '<=':
+          case 'like':
+            return `${ei(key)} ${operator.toUpperCase()} ${this._escapeValue(table, key, value)}`;
+          case '!':
+          case 'not':
+            return value===null ? `${ei(key)} IS NOT NULL` : `${ei(key)}!=${this._escapeValue(table, key, value)}`;
+          default:
+            return value===null ? `${ei(key)} IS NULL` : `${ei(key)}=${this._escapeValue(table, key, value)}`;
+        }
+      };
+      const writeCondition = (value, operator = '=') => {
+        if(isPrimitive(value)) return writeValue(value, operator);
+        if(['not', '!'].includes(operator)) return 'NOT ('+writeCondition(value)+')';
+        if(value instanceof Array) return '('+value.map(v => writeCondition(v, operator)).join(' OR ')+')';
+        else if(value instanceof Object) return '('+Object.keys(value).map(k => {
+          if(!operators.includes(k)) throw new Error(`${k} is not a valid constraint for key ${key}`);
+          if(!['not', '!', '='].includes(operator)) throw new Error(`${k} connot be combined with operator ${operator} in key ${key}`);
+          return writeCondition(value[k], k);
+        }).join(' AND ')+')';
+        throw new Error(`Should not be possible. We received this weird value : ${JSON.stringify(value)} which was nor object, nor array, nor primitive.`);
+      };
+      return writeCondition(conditions[key], operator);
+    }).join(' AND ');
+  }
+  
 }
 
-function createQuery(base, where) {
-  if(!where || !Object.keys(where).length) return base;
-  return `${base} WHERE ${convertIntoCondition(where)}`;
-}
-
-function convertIntoCondition(conditions, operator = '=') {
-  return Object.keys(conditions).map(key => {
-    function writeValue(value, operator) {
-      switch(operator) {
-        case '>':
-        case '<':
-        case '>=':
-        case '<=':
-        case 'ge':
-        case 'gt':
-        case 'le':
-        case 'lt':
-        case 'like':
-          return `${ei(key)} ${operator.toUpperCase()} ${es(value)}`;
-        case '~':
-          return `${ei(key)} LIKE ${es(value)}`;
-        case '!':
-        case 'not':
-          return value===null ? `${ei(key)} IS NOT NULL` : `${ei(key)}!=${es(value)}`;
-        default:
-          return value===null ? `${ei(key)} IS NULL` : `${ei(key)}=${es(value)}`;
-      }
-    }
-    function writeCondition(value, operator = '=') {
-      if(isPrimitive(value)) return writeValue(value, operator);
-      if(['not', '!'].includes(operator)) return 'NOT ('+writeCondition(value)+')';
-      if(value instanceof Array) return '('+value.map(v => writeCondition(v, operator)).join(' OR ')+')';
-      else if(value instanceof Object) return '('+Object.keys(value).map(k => {
-        if(!operators.includes(k)) throw new Error(`${k} is not a valid constraint for key ${key}`);
-        if(!['not', '!', '='].includes(operator)) throw new Error(`${k} connot be combined with operator ${operator} in key ${key}`);
-        return writeCondition(value[k], k);
-      }).join(' AND ')+')';
-      throw new Error(`Should not be possible. We received this weird value : ${JSON.stringify(value)} which was nor object, nor array, nor primitive.`);
-    }
-    return writeCondition(conditions[key], operator);
-  }).join(' AND ');
-}
+const operatorsMap = {
+  ge : '>=',
+  gt : '>',
+  le : '<=',
+  lt : '<',
+  '~' : 'LIKE',
+};
 
 function convertType(type) {
   switch(type) {
@@ -237,7 +246,7 @@ module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host
     return driver.query(`DROP DATABASE IF EXISTS ${database}`)
       //Create the database
       .then(() => driver.query(`CREATE DATABASE IF NOT EXISTS ${database} CHARACTER SET ${charset}`))
-      .then(() => console.log('\x1b[32m%s\x1b[0m', `Brand new ${database} database successfully created!`));
+      .then(() => log('info', `Brand new ${database} database successfully created!`));
   })
     //Enter the database and returns the driver
     .then(() => {

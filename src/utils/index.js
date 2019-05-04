@@ -101,7 +101,7 @@ function classifyRequestData(request, table) {
   return { request, search, primitives, objects, arrays };
 }
 
-const reservedKeys = ['reservedId', 'set', 'get', 'created', 'deleted', 'delete', 'create', 'add', 'remove', 'not', 'like', 'or', 'limit', 'offset', 'tableName', 'foreignKeys', 'type', 'parent', 'index'];
+const reservedKeys = ['reservedId', 'set', 'get', 'created', 'deleted', 'edited', 'delete', 'create', 'add', 'remove', 'not', 'like', 'or', 'limit', 'offset', 'tableName', 'foreignKeys', 'type', 'parent', 'index'];
 const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', '~', '!'];
 
 module.exports = {

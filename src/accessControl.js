@@ -6,9 +6,9 @@ function all() {
   return () => Promise.resolve();
 }
 
-/** No one is enabled by this rule, except if the privateKey is provided as a authId */
-function none({privateKey}) {
-  return ({authId}) => authId===privateKey ? Promise.resolve() : Promise.reject('None rule');
+/** No one is enabled by this rule */
+function none() {
+  return () => Promise.reject('None rule');
 }
 
 /** Product of provided rules */
@@ -84,6 +84,7 @@ function member(field) {
 function count(field, { amount, min, max} = {}) {
   if(!field || !(Object(field) instanceof String)) return Promise.reject('`count` rule expects its first parameter to be a string matching a field or a table. Please refer to the documentation.');
   if((amount===undefined && min===undefined && max===undefined) || [amount, min, max].find(e => e!==undefined && isNaN(e))) return Promise.reject('`count` rule expects its second parameter to be an object indicating the amount of elements allowed for this field.');
+  if(amount!==undefined && (min!==undefined || max !==undefined)) return Promise.reject('You cannot provide both \'amount\' and \'min/max\' in the \'count\' rule');
   const isValid = elt => {
     let value = elt instanceof Array ? elt.length : Number.parseInt(elt, 10);
     if(amount) return value===amount;

@@ -5,17 +5,14 @@ const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, DATABASE_ERROR, FORBID
 const checkParameters = require('./checks');
 const accessControl = require('./accessControl');
 const bodyParser = require('body-parser');
+const log = require('./utils/logger');
+const plugins = require('./plugins');
 module.exports = {
   ...accessControl,
   createServer,
   errors,
+  plugins,
 };
-
-// process.on('unhandledRejection', (reason, p) => {
-//   console.log('Unhandled Rejection at: Promise', p, 'reason:', reason);
-//   console.error(reason.stack);
-//   // application specific logging, throwing an error, or other logic here
-// });
 
 function createServer({port = 443, tables = {}, database = {}, rules = {}, plugins = [], middlewares = [], errorHandler}) {
   const allMiddlewares = plugins.map(plugin => plugin.middleware).filter(mw => mw).concat(middlewares);
@@ -26,7 +23,7 @@ function createServer({port = 443, tables = {}, database = {}, rules = {}, plugi
     //Create the database
     .then(() => createDatabase({tables, database, rules, plugins}))
     .then(requestHandler => {
-      console.log('\x1b[32m%s\x1b[0m', `${database.database} database ready to be used!`);
+      log('info', `${database.database} database ready to be used!`);
       //Start the server
       const app = express();
       app.listen(port);
@@ -39,7 +36,7 @@ function createServer({port = 443, tables = {}, database = {}, rules = {}, plugi
       //Listen to simple QL requests
       app.all('/', simpleQL(requestHandler));
       errorHandlers.forEach(h => app.use(h));
-      console.log('\x1b[32m%s\x1b[0m', 'Simple QL server ready!');
+      log('info', 'Simple QL server ready!');
     });
 }
 

@@ -1,41 +1,41 @@
 // import createDatabase, { is, request, or, member, none } from 'simple-ql';
-const { createServer, is, or, member, count, none, all, not, and } = require('./src');
-const loginPlugin = require('./src/plugins/login');
+const { createServer, is, or, member, count, none, all, not, and, plugins : { loginPlugin } } = require('./src');
 
 /*************************************************************************
  *************************** TABLES DECLARATION **************************/
 
 // First, just focus on the structure of your data. Describe your table architecture
-var User = {
+const User = {
   pseudo: 'string/25',
   email: 'string/40',
   password: 'binary/64',
   salt: 'binary/16',
-  contacts: [User],
-  invited: [User],
   index: [
     //You can use the object form
     {
       column: 'email',
       type: 'unique',
-      length: '8',
+      length: 8,
     },
     //Or the short string form
     'pseudo/8'
   ],
 };
+//We need this step to use self-references or cross-references
+User.contacts = [User];
+User.invited = [User];
 
 const Comment = {
   content: 'text',
   title: {
     type : 'string',
     length: 60,
-    nullable : true,
+    notNull : true,
     defaultValue : null,
   },
   author: User,
-  date: 'date',
-  lastModification: 'date',
+  date: 'dateTime',
+  lastModification: 'dateTime',
   index : ['date', 'content/fulltext'],
 };
 
@@ -43,10 +43,6 @@ const Feed = {
   participants: [User],
   comments: [Comment],
 };
-
-//We need this step to use self-references or cross-references
-User.contacts = [User];
-User.invited = [User];
 
 const tables = {User, Feed, Comment};
 
@@ -107,7 +103,7 @@ const rules = {
     delete : none,          //No one can delete a feed
     create : and(
       member('participants'), //Users always need to be a member of the feed they wish to create
-      count('participants', { min: 2 })
+      count('participants', { amount: 2 }) //When creating a Feed, the amount of participants must equal 2
     ),
     read : member('participants'),            //Only the members of a feed can read its content
     write : none,           //No one can edit a feed once created
@@ -130,12 +126,11 @@ const rules = {
 /** Ensure that only the feed's participants can read the message content */
 function customRule() {
   return ({query, object, authId, request}) => {
-    //In case of message creation, the feed might not exist yet
-    if(request.create) {
-      if(request.parent && request.parent.tableName==='Feed') return Promise.resolve();
-      return Promise.reject('Comments must belong to a feed.');
-    }
-    else return query({
+    //In case of message creation, the feed might not exist yet but we don't mind reading the data anyway
+    if(request.create) return Promise.resolve();
+    //We want to make sure that only participants of a feed can read the messages from that feed.
+    return query({
+      //We look for feeds containing that comment, and the author as participant
       Feed: {
         comments: { reservedId : object.reservedId },
         participants: {
@@ -143,8 +138,10 @@ function customRule() {
         }
       }
     },
+    //We give admin rights to this request to be able to read the data from the database, but we set readOnly mode to be safer.
     { admin: true, readOnly : true }).then(results => {
-      return results.length>0 || Promise.reject('Only feed participants can read message content');
+      //If we found no Feed matching the request, we reject the access to the message.
+      return results.Feed.length>0 ? Promise.resolve() : Promise.reject('Only feed participants can read message content');
     });
   };
 }
@@ -198,16 +195,19 @@ const customPlugin = {
         }
       });
     },
-    Comment: (request) => {
+    Comment: (request, { parent }) => {
+      //In case of message creation, the feed might not exist yet
       if(request.create) {
+        //We want to make sure that the message belongs to a feed. The way to do so is to ensure that the parent of this request is Feed.
+        if(!parent || parent.tableName!=='Feed') return Promise.reject('Comments must belong to a feed.');
         //Upon creation, we set the fields `date` and `lastModification`.
-        const date = new Date();
+        const date = new Date().toISOString();
         request.date = date;
         request.lastModification = date;
       }
       if(request.set) {
         //We update the `lastModification` field each time a modification happens
-        const date = new Date();
+        const date = new Date().toISOString();
         request.set.lastModification = date;
       }
     }

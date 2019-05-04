@@ -2,7 +2,7 @@ const readline = require('readline');
 const { isPrimitive, classifyRequestData, operators, sequence } = require('./utils');
 const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, DATABASE_ERROR } = require('./errors');
 const { prepareTables, prepareRules } = require('./prepare');
-const { magenta } = require('./utils/colors');
+const log = require('./utils/logger');
 
 /** Load the driver according to database type, and create the database connection, and the database itself if required */
 function createDatabase({tables, database, rules = {}, plugins = []}) {
@@ -114,7 +114,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
   /** This will handle a request workflow for a single table */
   function resolveRequest({tableName, request: initialRequest, parentRequest, local, pluginCall}) {
-    console.log('treating ', tableName, JSON.stringify(initialRequest));
+    log('resolution part', 'treating : ', tableName, JSON.stringify(initialRequest));
 
     //Classify the request into the elements we will need
     const table = tables[tableName];
@@ -172,7 +172,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
       //If this request is authenticated with the privateKey, we don't need to check integrity.
       if(local.authId === privateKey) return Promise.resolve();
 
-      console.log(magenta, 'integrityCheck');
+      log('resolution part title', 'integrityCheck');
 
       /** Check if the values in the request are acceptable. */
       function checkEntry(req, primitives, objects, arrays) {
@@ -238,7 +238,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
     /** We look for objects that match the request constraints and store their id into the key+Id property and add the objects into this.resolvedObjects map */
     function getObjects() {
-      console.log(magenta, 'getObjects');
+      log('resolution part title', 'getObjects');
       //We resolve the children objects
       return sequence(objects.map(key => () => {
         //Take care of null value
@@ -265,7 +265,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
     /** Filter the results that respond to the arrays constraints. **/
     function getChildrenArrays() {
-      console.log(magenta, 'getChildrenArrays');
+      log('resolution part title', 'getChildrenArrays');
       return sequence(arrays.map(key =>
         //We resolve queries about arrays
         () => applyInTable(request[key], table[key][0].tableName)
@@ -276,10 +276,17 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
     /** Insert elements inside the table if request.create is defined */
     function create() {
       if(!request.create) return Promise.resolve();
-      console.log(magenta, 'create');
+      log('resolution part title', 'create');
       //TODO gérer les références internes entre créations (un message et un feed par exemple ? un user et ses contacts ?)
       return getObjects().then(getChildrenArrays).then(() => {
         const element = {};
+        //FIXME : we should be able to create more than one object if necessary
+        //Make sure we cannot create more than one object at a time
+        const array = primitives.find(key => request[key] instanceof Array);
+        if(array) return Promise.reject({
+          name : BAD_REQUEST,
+          message : `It is not allowed to provide an array for key ${array} in table ${tableName} during creation.`,
+        });
         //Add primitives values to be created
         primitives.forEach(key => element[key] = request[key]);
         //List the object found to the new element
@@ -313,7 +320,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
     /** Look into the database for objects matching the constraints. */
     function get() {
-      console.log(magenta, 'get');
+      log('resolution part title', 'get');
       if(!search.includes('reservedId')) search.push('reservedId');
       //Create the where clause
       const where = {};
@@ -340,7 +347,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
     }
 
     function resolveObjects(results) {
-      console.log(magenta, 'resolveObjects');
+      log('resolution part title', 'resolveObjects');
       return sequence(objects.map(key => () => sequence(results.map(result => () => {
         request[key].reservedId = result[key+'Id'];
         return applyInTable(request[key], table[key].tableName).then(objects => {
@@ -348,7 +355,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             name: NOT_FOUND,
             message: `Nothing found with these constraints : ${tableName}->${key}->${JSON.stringify(request[key])}`,
           });
-          else if(objects.length>0) return Promise.reject({
+          else if(objects.length>1) return Promise.reject({
             name: DATABASE_ERROR,
             message: `We found more than one object for key ${key} with the id ${result[key+'Id']} in table ${table[key].tableName}`,
           });
@@ -363,7 +370,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
     /** Filter the results that respond to the arrays constraints. **/
     function resolveChildrenArrays(results) {
-      console.log(magenta, 'resolveChildrenArrays');
+      log('resolution part title', 'resolveChildrenArrays');
       //We keep only the arrays constraints that are truly constraints. Constraints that have keys other than 'add' or 'remove'.
       const realArrays = arrays.filter(key => Object.keys(request[key]).find(k => !['add', 'remove'].includes(k)));
       return sequence(results.map(result =>
@@ -371,7 +378,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           //We look for all objects associated to the result in the association table
           () => driver.get({table : `${key}${tableName}`, search : [key+'Id'], where : {
             [tableName+'Id'] : result.reservedId,
-          }})
+          }, offset : request[key].offset, limit : request[key].limit})
             .then(associatedResults => {
               if(!associatedResults.length) return [];
               //We look for objects that match all the constraints
@@ -391,7 +398,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
     /** Remove elements from the table if request.delete is defined */
     function remove(results) {
       if(!request.delete) return Promise.resolve(results);
-      console.log(magenta, 'delete');
+      log('resolution part title', 'delete');
       //Look for matching objects
       return driver.delete({
         table : tableName,
@@ -406,9 +413,12 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
     /** Change the table's values if request.set is defined */
     function update(results) {
       if(!request.set) return Promise.resolve(results);
-      console.log(magenta, 'update');
+      if(!results.length) return Promise.resolve(results);
+      log('resolution part title', 'update');
       const { primitives : primitivesSet, objects : objectsSet, arrays : arraysSet } = classifyRequestData(request.set, table);
       const values = {}; // The values to be edited
+      //Mark the elements as being edited
+      results.forEach(result => result.edited = true);
       //Update the results with primitives values
       primitivesSet.forEach(key => results.forEach(result => {
         result[key] = request.set[key];
@@ -467,7 +477,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
 
     function updateChildrenArrays(results) {
-      console.log(magenta, 'updateChildrenArrays');
+      log('resolution part title', 'updateChildrenArrays');
       return sequence(arrays.map(key => () => {
         const { add, remove } = request[key];
         return Promise.resolve()
@@ -504,7 +514,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
     function controlAccess(results) {
       //If this request is authenticated with the privateKey, we don't need to control access.
       if(local.authId === privateKey) return Promise.resolve(results);
-      console.log(magenta, 'controlAccess');
+      log('resolution part title', 'controlAccess');
       const ruleSet = rules[tableName];
 
       return sequence(results.map(result => () => {
@@ -523,7 +533,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             else if(err) return Promise.reject(err);
           })
             .catch(err => {
-              console.log(`Access denied for field ${key} in table ${tableName} for authId ${local.authId}. Error : ${err.message || err}`);
+              log('access warning', `Access denied for field ${key} in table ${tableName} for authId ${local.authId}. Error : ${err.message || err}`);
               //Hiding sensitive data
               result[key] = 'Access denied';
             });
@@ -622,7 +632,7 @@ function createTables({driver, tables, create}) {
     delete data[tableName].index;
     return driver.createTable({table: tableName, data: data[tableName], index});
   })).then(() => driver.createForeignKeys(foreignKeys)).then(() => data);
-  console.log('\x1b[202m%s\x1b[0m', 'The "create" property was not set in the "database" object. Skipping tables creation.');
+  log('info', '\x1b[202m%s\x1b[0m', 'The "create" property was not set in the "database" object. Skipping tables creation.');
   return Promise.resolve(data);
 }
 

@@ -1,4 +1,9 @@
 const colors = {
+  0  : 'reset',
+  1  : 'bold',
+  2  : 'thin',
+  3  : 'italic',
+  4  : 'underline',
   30 : 'black',
   31 : 'red',
   32 : 'green',
@@ -17,6 +22,6 @@ const colors = {
 };
 
 const colorMap = {};
-Object.keys(colors).forEach(key => colorMap[colors[key]] = `\x1b[${key}m%s\x1b[0m`);
+Object.keys(colors).forEach(key => colorMap[colors[key]] = `\x1b[${key}m`);
 
 module.exports = colorMap;
