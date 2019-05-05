@@ -5,7 +5,7 @@ A node framework to manage your backend and your database with the least possibl
 
 ## What the heck is SimpleQL and why should I bother?
 
-SimpleQL is a NodeJS framework to create a server in 10 minutes that will handle al kind of data and requests without requiring you to do any logic server-side, nor develop any endpoint.
+SimpleQL is a NodeJS framework to create a server in 10 minutes that will handle al kind of data and requests without requiring you to do any low-value logic server-side, nor develop any endpoint. Define a general behaviour that will quickly get you a database working and able to treat all kinds of requests, and then you can add your custom logic where it is needed and valuable.
 
  * **Simple:** Only one route for all your requests
  * **Predictable:** the response of any SimpleQL request is formatted exactly the same way as the request, so you don't need to wonder about what the result of a request will looks like.
@@ -50,11 +50,11 @@ const plugins = [
 createServer({port : 80, tables, database, rules, plugins})
 ```
 
-### [Prepare your tables](tables-configuration)
-### [Setup access to your database (like MYSQL)](access-to-database)
-### [Setting access rights](setting-access-rights)
-### [Adding plugins](adding-plugins)
-### [Requesting your database](simpleql-requests)
+### [Prepare your tables](https://github.com/Sharcoux/SimpleQL/wiki/tables-configuration)
+### [Setup access to your database (like MYSQL)](https://github.com/Sharcoux/SimpleQL/wiki/access-to-database)
+### [Setting access rights](https://github.com/Sharcoux/SimpleQL/wiki/setting-access-rights)
+### [Adding plugins](https://github.com/Sharcoux/SimpleQL/wiki/adding-plugins)
+### [Requesting your database](https://github.com/Sharcoux/SimpleQL/wiki/simpleql-requests)
 
 This is what a SimpleQL request will look like:
 

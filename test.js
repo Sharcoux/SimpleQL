@@ -16,20 +16,20 @@ function request(req) {
   return axios.post('/', req);
 }
 function logResponse(response) {
-  log('test response', util.inspect(response.data, false, null, true), '\n\n');
+  log('test response', util.inspect(response.data, false, null, true), '\n');
   return response;
 }
 function logError(response) {
-  log('test error response', response.message, util.inspect(response.response.data, false, null, true), '\n\n');
+  log('test error response', response.message, util.inspect(response.response.data, false, null, true), '\n');
   return response;
 }
 
 createTestServer()
-  .then(() => log('test title', 'Test server ready'))
+  .then(() => log('test title', '\n', 'Test server ready'))
 
   // Registering 2 users
   .then(() => Promise.resolve()
-    .then(() => log('test title', 'Registration of 2 users'))
+    .then(() => log('test title', '\n', 'Registration of 2 users'))
     .then(() => request({
       User : [
         {
@@ -51,7 +51,7 @@ createTestServer()
   
   // Login as user1
   .then(() => Promise.resolve()
-    .then(() => log('test title', 'Login as User1'))
+    .then(() => log('test title', '\n', 'Login as User1'))
     .then(() => request({
       User: {
         email: 'user1@email.com',
@@ -66,7 +66,7 @@ createTestServer()
 
   //Retrieve all current user info
   .then(() => Promise.resolve()
-    .then(() => log('test title', 'Retrive current profile'))
+    .then(() => log('test title', '\n', 'Retrive current profile'))
     .then(() => request({
       User: {
         email: 'user1@email.com',
@@ -78,7 +78,7 @@ createTestServer()
     
   //Forbidden : retrieve user2 private data
   .then(() => Promise.resolve()
-    .then(() => log('test error title', 'Forbidden : Retrive profile from another user'))
+    .then(() => log('test error title', '\n', 'Forbidden : Retrive profile from another user'))
     .then(() => request({
       User: {
         email: 'user2@email.com',
@@ -90,7 +90,7 @@ createTestServer()
 
   //Forbidden : Adding a user not invited as contact
   .then(() => Promise.resolve()
-    .then(() => log('test error title', 'Forbidden : Adding a contact'))
+    .then(() => log('test error title', '\n', 'Forbidden : Adding a contact'))
     .then(() => request({
       User: {
         email : 'user1@email.com',
@@ -104,7 +104,7 @@ createTestServer()
   
   //Invite a user as contact
   .then(() => Promise.resolve()
-    .then(() => log('test title', 'Inviting a user as contact'))
+    .then(() => log('test title', '\n', 'Inviting a user as contact'))
     .then(() => request({
       User: {
         email : 'user1@email.com',
@@ -118,7 +118,7 @@ createTestServer()
 
   // Login as user2
   .then(() => Promise.resolve()
-    .then(() => log('test title', 'Login as User2'))
+    .then(() => log('test title', '\n', 'Login as User2'))
     .then(() => request({
       User: {
         email: 'user2@email.com',
@@ -132,7 +132,7 @@ createTestServer()
 
   //Adding a user not invited as contact
   .then(() => Promise.resolve()
-    .then(() => log('test title', 'Adding a contact'))
+    .then(() => log('test title', '\n', 'Adding a contact'))
     .then(() => request({
       User: {
         email : 'user2@email.com',
@@ -146,7 +146,7 @@ createTestServer()
 
   //Creating a feed
   .then(() => Promise.resolve()
-    .then(() => log('test title', 'Creating a feed for the users'))
+    .then(() => log('test title', '\n', 'Creating a feed for the users'))
     .then(() => request({
       Feed: {
         create : true,
@@ -161,7 +161,7 @@ createTestServer()
 
   //Creating a message
   .then(() => Promise.resolve()
-    .then(() => log('test title', 'Creating a message'))
+    .then(() => log('test title', '\n', 'Creating a message'))
     .then(() => request({
       Feed : {
         participants : [
@@ -185,7 +185,7 @@ createTestServer()
 
   //Editing all messages between 2 dates
   .then(() => Promise.resolve()
-    .then(() => log('test title', 'Editing all messages between 2 dates'))
+    .then(() => log('test title', '\n', 'Editing all messages between 2 dates'))
     .then(() => request({
       Comment : {
         title : 'Test',
@@ -206,7 +206,7 @@ createTestServer()
 
   //Forbidden : editing another user data
   .then(() => Promise.resolve()
-    .then(() => log('test error title', 'Forbidden : Edit another user'))
+    .then(() => log('test error title', '\n', 'Forbidden : Edit another user'))
     .then(() => request({
       User : {
         email: 'user1@email.com',
@@ -220,7 +220,7 @@ createTestServer()
 
   //Forbidden : editing our personal data
   .then(() => Promise.resolve()
-    .then(() => log('test title', 'Edit our personal data'))
+    .then(() => log('test title', '\n', 'Edit our personal data'))
     .then(() => request({
       User : {
         email: 'user2@email.com',
@@ -234,7 +234,7 @@ createTestServer()
 
   //Forbidden : deleting another user
   .then(() => Promise.resolve()
-    .then(() => log('test error title', 'Forbidden : Deleting another user'))
+    .then(() => log('test error title', '\n', 'Forbidden : Deleting another user'))
     .then(() => request({
       User : {
         email: 'user1@email.com',
@@ -246,7 +246,7 @@ createTestServer()
 
   //Deleting user
   .then(() => Promise.resolve()
-    .then(() => log('test title', 'Deleting our own data'))
+    .then(() => log('test title', '\n', 'Deleting our own data'))
     .then(() => request({
       User : {
         email: 'user2@email.com',

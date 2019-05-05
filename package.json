@@ -1,5 +1,5 @@
 {
-  "name": "simpleql",
+  "name": "simple-ql",
   "version": "0.8.0",
   "description": "A node framework to manage your backend and your database with the least possible amount of code.",
   "main": "src/index.js",
