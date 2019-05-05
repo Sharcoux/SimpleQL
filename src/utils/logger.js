@@ -11,6 +11,7 @@ const categories = {
   'resolution part title' : 'magenta',
   'access warning' : 'yellow',
   'info' : 'cyan',
+  'login' : 'cyan',
 };
 
 function log(category, ...data) {

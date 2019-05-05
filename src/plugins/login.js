@@ -98,7 +98,7 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
         if(request.create) {
           //Someone is trying to register. We will hash the pwd and add a salt string if required
           const { [login]: log, [password]: pass } = request;
-          logger('login', log, 'is being created');
+          logger('info', log, 'is being created');
           //Missing login or password
           if(!log || !pass) return Promise.reject({
             name : BAD_REQUEST,
@@ -121,7 +121,7 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
 
         //Logging a user
         } else if(request[login] && request[password] && !request.create) {
-          logger('login', request[login], 'is trying to log in');
+          logger('info', request[login], 'is trying to log in');
           //Someone is trying to log in. We retrieve their data
           const get = [password, 'reservedId'];
           if(salt) get.push(salt);//We might need the salt if required
@@ -147,6 +147,7 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
             return createHash(request[password], saltString.toString('hex')).then(hash => {
               if(hash.equals(hashedPass)) {
                 delete request[password];
+                request.reservedId = reservedId;
                 //If the log succeeds, we return a jwt token
                 return createJWT(reservedId)
                   .then(jwtToken => jwt[reservedId] = jwtToken);
