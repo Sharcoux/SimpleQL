@@ -4,7 +4,8 @@
   "description": "A node framework to manage your backend and your database with the least possible amount of code.",
   "main": "src/index.js",
   "scripts": {
-    "test": "node --trace-warnings ./test.js"
+    "test": "node --trace-warnings ./test.js",
+    "release": "release-it"
   },
   "engines": {
     "node": ">=10.12.0"
@@ -32,7 +33,8 @@
   },
   "devDependencies": {
     "axios": "^0.18.0",
-    "eslint": "^5.16.0"
+    "eslint": "^5.16.0",
+    "release-it": "^12.0.1"
   },
   "dependencies": {
     "body-parser": "^1.19.0",
