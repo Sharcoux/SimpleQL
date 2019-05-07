@@ -1,17 +1,17 @@
 const colors = require('./colors');
 const categories = {
-  'database query' : 'bold',
-  'database result' : 'default',
-  'test title' : 'cyan',
-  'test error title' : 'red',
-  'test request' : 'default',
-  'test response' : 'bold',
-  'test error response' : 'bold',
-  'resolution part' : 'default',
-  'resolution part title' : 'magenta',
-  'access warning' : 'yellow',
+  // 'database query' : 'bold',
+  // 'database result' : 'default',
+  // 'test title' : 'cyan',
+  // 'test error title' : 'red',
+  // 'test request' : 'default',
+  // 'test response' : 'bold',
+  // 'test error response' : 'bold',
+  // 'resolution part' : 'default',
+  // 'resolution part title' : 'magenta',
+  // 'access warning' : 'yellow',
   'info' : 'cyan',
-  'login' : 'cyan',
+  // 'login' : 'cyan',
 };
 
 function log(category, ...data) {
