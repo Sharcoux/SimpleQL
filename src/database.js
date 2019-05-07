@@ -183,7 +183,6 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
               if(err.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' && err.sqlMessage.includes('Access denied')) {
                 return Promise.reject({name: ACCESS_DENIED, message: `You are not allowed to access some data needed for your request in table ${this.tableName}.`});
               }
-              console.error(err);
               return Promise.reject(err);
             });
         });

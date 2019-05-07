@@ -1,13 +1,17 @@
 const { stringify } = require('./');
 
+/** Check that the data matches the model */
 function checkType(model, data) {
   if(!model) return;
   if(data===undefined) throw generateError(model, data, '');
+  //If the data is a string, we ensure that the model accepts string as result
   else if(Object(data) instanceof String) {
-    if(!'string'.match(new RegExp(model))) throw generateError(formatModel(model), stringify(data), '');
-    return;
+    if(model==='string' || model==='*') return;
+    throw generateError(formatModel(model), stringify(data), '');
+    //If the data is a function we ensure that the model is 'function'
   } else if(data instanceof Function) {
     if(model!=='function') throw generateError(formatModel(model), data);
+    //If the data id an object we ensure that the model is an object matching the data
   } else if(data!==null && data instanceof Object) {
     if(!(model instanceof Object)) throw generateError(formatModel(model), stringify(data) + '\n', '');
     const keys = Object.keys(model);
@@ -24,9 +28,13 @@ function checkType(model, data) {
     const strict = model.strict;
     const unknownKey = Object.keys(data).find(key => !keys.includes(key));
     if(unknownKey && strict) throw generateError('nothing', data[unknownKey], unknownKey);
+    //If the data is a primitive
   } else {
+    //If the model is not a string, there is an issue
     if(!(Object(model) instanceof String)) throw generateError(formatModel(model), stringify(data), '');
-    if((getType(data)).match(new RegExp(model))) return;
+    //If the model accepts the data type, it's allright
+    if(model===getType(data) || model==='*') return;
+    //We refuse this data
     throw generateError(model, data, '');
   }
 }

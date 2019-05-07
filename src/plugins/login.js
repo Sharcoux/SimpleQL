@@ -183,7 +183,6 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
         results.forEach(result => {
           const id = result.reservedId;
           const tokens = read('jwt') || {};
-          console.log('getting tokens', tokens);
           if(tokens[id]) {
             result.jwt = tokens[id];
             delete tokens[id];

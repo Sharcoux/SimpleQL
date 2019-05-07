@@ -2,7 +2,7 @@ const colors = require('./colors');
 const categories = {
   // 'database query' : 'bold',
   // 'database result' : 'default',
-  // 'test title' : 'cyan',
+  'test title' : 'cyan',
   // 'test error title' : 'red',
   // 'test request' : 'default',
   // 'test response' : 'bold',
@@ -13,6 +13,8 @@ const categories = {
   'info' : 'cyan',
   // 'login' : 'cyan',
 };
+
+console.error = () => console.log(new Error());
 
 function log(category, ...data) {
   const c = categories[category];

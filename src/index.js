@@ -36,6 +36,8 @@ function createServer({port = 443, tables = {}, database = {}, rules = {}, plugi
       //Listen to simple QL requests
       app.all('/', simpleQL(requestHandler));
       errorHandlers.forEach(h => app.use(h));
+      //Final error handler, ditching error
+      app.use((err, req, res, next) => next());
       log('info', 'Simple QL server ready!');
     });
 }

@@ -77,7 +77,10 @@ class Driver {
     let query = this._createQuery(`SELECT ${search.map(s => ei(s)).join(', ')} FROM ${ei(table)}`, where, table);
     if(offset) query += ` OFFSET ${es(parseInt(offset, 10))}`;
     if(limit) query += ` LIMIT ${es(parseInt(limit, 10))}`;
-    return this.query(query).then(results => log('database result', JSON.stringify(results)) || results instanceof Array ? results : [results]);
+    return this.query(query).then(results => {
+      log('database result', JSON.stringify(results));
+      return results instanceof Array ? results : [results];
+    });
   }
   delete({table, where}) {
     const query = this._createQuery(`DELETE FROM ${ei(table)}`, where, table);

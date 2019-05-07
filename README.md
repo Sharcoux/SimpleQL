@@ -59,11 +59,7 @@ const errorHandler = (err, req, res, next) => next(err);
 createServer({port : 80, tables, database, rules, plugins, middlewares, errorHandler});
 ```
 
-### [Prepare your tables](https://github.com/Sharcoux/SimpleQL/wiki/tables-configuration)
-### [Setup access to your database (like MYSQL)](https://github.com/Sharcoux/SimpleQL/wiki/access-to-database)
-### [Setting access rights](https://github.com/Sharcoux/SimpleQL/wiki/setting-access-rights)
-### [Adding plugins](https://github.com/Sharcoux/SimpleQL/wiki/adding-plugins)
-### [Requesting your database](https://github.com/Sharcoux/SimpleQL/wiki/simpleql-requests)
+**Example:** [You can find here a full example of a messenger-like SimpleQL server configuration](https://github.com/Sharcoux/SimpleQL/blob/master/example.js)
 
 This is what a SimpleQL request will look like:
 
@@ -84,6 +80,8 @@ This is what a SimpleQL request will look like:
     }
 ```
 
+**Example:** [You can find here a set of requests matching the previous server example](https://github.com/Sharcoux/SimpleQL/blob/master/test.js)
+
 In one request, we are getting all the messages from `user2@email.com` published 2h around `date`, and we are changing their title to `random`. This is what the response will looks like:
 
 ```javascript
@@ -100,3 +98,10 @@ In one request, we are getting all the messages from `user2@email.com` published
 }
 ```
 
+## To go deeper
+
+### [Prepare your tables](https://github.com/Sharcoux/SimpleQL/wiki/tables-configuration)
+### [Setup access to your database (like MYSQL)](https://github.com/Sharcoux/SimpleQL/wiki/access-to-database)
+### [Setting access rights](https://github.com/Sharcoux/SimpleQL/wiki/setting-access-rights)
+### [Adding plugins](https://github.com/Sharcoux/SimpleQL/wiki/adding-plugins)
+### [Requesting your database](https://github.com/Sharcoux/SimpleQL/wiki/simpleql-requests)
