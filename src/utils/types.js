@@ -5,7 +5,7 @@ const dbColumn = {
   unsigned: 'boolean',
   notNull: 'boolean',
   defaultValue: '*',
-  required : ['type', 'length'],
+  required : ['type'],
   strict : true,
 };
 

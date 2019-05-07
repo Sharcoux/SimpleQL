@@ -1,4 +1,4 @@
-// import createDatabase, { is, request, or, member, none } from 'simple-ql';
+// const { createServer, is, or, member, count, none, all, not, and, plugins : { loginPlugin } } = require('simple-ql');
 const { createServer, is, or, member, count, none, all, not, and, plugins : { loginPlugin } } = require('./src');
 
 /*************************************************************************
@@ -31,7 +31,6 @@ const Comment = {
     type : 'string',
     length: 60,
     notNull : true,
-    defaultValue : null,
   },
   author: User,
   date: 'dateTime',

@@ -92,19 +92,24 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
       function query(request, { readOnly, admin } = { readOnly : false, admin : false }) {
         return resolve(request, { authId : admin ? privateKey : local.authId, readOnly });
       }
-      //Function used to edit local request parameters (authId, readOnly) during the request
-      function update(key, value) {
-        local[key] = value;
-      }
-  
+      
       function pluginCall(data, event) {
+        //Function provided to edit local request parameters (authId, readOnly) during the request
+        function update(key, value) {
+          local[key] = value;
+        }
+  
+        //Function provided to read local parameters values during the request
+        function read(key) {
+          return local[key];
+        }
         log('resolution part title', event, tableName);
         return sequence(plugins
           .filter(plugin => plugin[event])
           .map(plugin => plugin[event])
           .filter(pluginOnEvent => pluginOnEvent[tableName])
           .map(pluginOnEvent => pluginOnEvent[tableName])
-          .map(callback => () => callback(data, {parent : parentRequest, query, update, isAdmin : local.authId === privateKey}))
+          .map(callback => () => callback(data, {parent : parentRequest, query, update, read, isAdmin : local.authId === privateKey}))
         );
       }
 

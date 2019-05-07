@@ -128,8 +128,8 @@ class Driver {
     const columns = columnsKeys.map(name => {
       const { type, length, unsigned, notNull, defaultValue, autoIncrement } = data[name];
       //We record binary columns to not escape their values during INSERT or UPDATE
-      if(type==='binary') this.binaries.push(`${table}.${name}`);
-      else if(type==='date' || type==='dateTime') this.dates.push(`${table}.${name}`);
+      if(type==='binary' || type==='varbinary') this.binaries.push(`${table}.${name}`);
+      else if(type==='dateTime') this.dates.push(`${table}.${name}`);
 
       let query = `${name} ${convertType(type)}`;
       if(length) query += `(${length})`;
@@ -139,9 +139,6 @@ class Driver {
       if(autoIncrement) query += ' AUTO_INCREMENT';
       return query;
     });
-    //The length is required
-    const missingLength = columnsKeys.find(name => !data[name].length);
-    if(missingLength && lengthRequired.includes(data[missingLength].type)) return Promise.reject(`You need to specify the column length for key ${missingLength} in table ${table}. You provided : ${JSON.stringify(data[missingLength])}.`);
     //Create indexes
     const indexes = index.map(elt => {
       const type = elt.type ? elt.type.toUpperCase()+' ' : '';
@@ -233,8 +230,6 @@ function convertType(type) {
     default : return type.toUpperCase();
   }
 }
-
-const lengthRequired = ['string', 'varchar'];
 
 module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host = 'localhost', connectionLimit = 100, ...parameters}) => {
   return Promise.resolve().then(() => {

@@ -1,10 +1,14 @@
 const { BAD_REQUEST, NOT_FOUND, WRONG_PASSWORD } = require('../errors');
 const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
 const check = require('../utils/type-checking');
 const { login : loginModel , dbColumn } = require('../utils/types');
 const logger = require('../utils/logger');
-
+const jwt = {};
+try {
+  Object.assign(jwt, require('jsonwebtoken'));
+} catch(err) {
+  throw new Error('You need to add jsonwebtoken as a dependency to your project to use the login pluggin.', err);
+} 
 const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
   modulusLength: 4096,
   publicKeyEncoding: {
@@ -67,7 +71,6 @@ function createHash(password, salt) {
  */
 function createLocalLogin({login = 'email', password = 'password', salt = 'salt', userTable = 'User'}) {
   check(loginModel, {login, password, salt, userTable});
-  const jwt = {};
   return {
     middleware: (req, res, next) => {
       const token = req.headers && req.headers.authorization && req.headers.authorization.split(' ')[1];
@@ -93,7 +96,7 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
       if(!table.index.find(elt => elt.column === login && elt.type === 'unique')) return Promise.reject(`${login} should be made a unique index in table ${userTable}. add a field index:['${login}/unique'] inside ${userTable}.`);
     },
     onRequest: {
-      [userTable] : (request, {query, update}) => {
+      [userTable] : (request, {query, update, read}) => {
         //Creating a user
         if(request.create) {
           //Someone is trying to register. We will hash the pwd and add a salt string if required
@@ -148,9 +151,11 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
               if(hash.equals(hashedPass)) {
                 delete request[password];
                 request.reservedId = reservedId;
+                const tokens = read('jwt') || {};
                 //If the log succeeds, we return a jwt token
                 return createJWT(reservedId)
-                  .then(jwtToken => jwt[reservedId] = jwtToken);
+                  .then(jwtToken => tokens[reservedId] = jwtToken)
+                  .then(() => update('jwt', tokens));
               } else {
                 return Promise.reject({
                   name : WRONG_PASSWORD,
@@ -167,17 +172,21 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
         const reservedId = object.reservedId;
         update('authId', reservedId);
         return createJWT(reservedId)
-          .then(jwt => object.jwt = jwt)
-          .then(() => object);
+          .then(jwt => {
+            object.jwt = jwt;
+            return object;
+          });
       }
     },
     onResult: {
-      [userTable] : results => {
+      [userTable] : (results, { read }) => {
         results.forEach(result => {
           const id = result.reservedId;
-          if(jwt[id]) {
-            result.jwt = jwt[id];
-            delete jwt[id];
+          const tokens = read('jwt') || {};
+          console.log('getting tokens', tokens);
+          if(tokens[id]) {
+            result.jwt = tokens[id];
+            delete tokens[id];
           }
         });
         return results;
