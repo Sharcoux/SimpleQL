@@ -5,7 +5,7 @@ A node framework to manage your backend and your database with the least possibl
 
 ## What the heck is SimpleQL and why should I bother?
 
-SimpleQL is a NodeJS framework to create a server in 10 minutes that will handle al kind of data and requests without requiring you to do any low-value logic server-side, nor develop any endpoint. Define a general behaviour that will quickly get you a database working and able to treat all kinds of requests, and then you can add your custom logic where it is needed and valuable.
+SimpleQL is a NodeJS framework to create a server in 10 minutes that will handle all kind of data and requests without requiring you to do any low-value logic server-side, nor develop any endpoint. Define a general behaviour that will quickly get you a database working and able to treat all kinds of requests, and then you can add your custom logic where it is needed and valuable.
 
  * **Simple:** Only one route for all your requests
  * **Predictable:** the response of any SimpleQL request is formatted exactly the same way as the request, so you don't need to wonder about what the result of a request will looks like.
@@ -48,6 +48,15 @@ const plugins = [
 ]
 
 createServer({port : 80, tables, database, rules, plugins})
+```
+
+**Note:** You can also add a list of *express* **middlewares** and an **error handler** directly as parameter of the `createServer` function:
+
+```javascript
+const middleware = (req, res, next) => next();
+const middlewares = [middleware];
+const errorHandler = (err, req, res, next) => next(err);
+createServer({port : 80, tables, database, rules, plugins, middlewares, errorHandler});
 ```
 
 ### [Prepare your tables](https://github.com/Sharcoux/SimpleQL/wiki/tables-configuration)
