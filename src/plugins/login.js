@@ -168,14 +168,16 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
       }
     },
     onCreation: {
-      [userTable] : (object, { update }) => {
-        const reservedId = object.reservedId;
-        update('authId', reservedId);
-        return createJWT(reservedId)
-          .then(jwt => {
-            object.jwt = jwt;
-            return object;
-          });
+      [userTable] : (objects, { update }) => {
+        return Promise.all(objects.map(object => {
+          const reservedId = object.reservedId;
+          update('authId', reservedId);
+          return createJWT(reservedId)
+            .then(jwt => {
+              object.jwt = jwt;
+              return object;
+            });
+        }));
       }
     },
     onResult: {

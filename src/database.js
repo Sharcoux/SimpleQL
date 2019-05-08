@@ -310,32 +310,46 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             primitives.forEach(key => element[key] = request[key]);
             //List the object found to the new element
             objects.forEach(key => element[key+'Id'] = request[key].reservedId);
+            //For each property provided as an array, we duplicate the elements to be created. {a : [1, 2]} becomes [{a: 1}, {a : 2}].
+            let elements = [element];
+            Object.keys(element).forEach(key => {
+              const val = element[key];
+              if(val instanceof Array) {
+                const L = [];
+                val.forEach(v => elements.forEach(e => L.push({...e, [key] : v})));
+                elements = L;
+              }
+            });
+
             //Create the elements inside the database
-            return driver.create({ table : tableName, elements : element })
-              .then(([reservedId]) => {
-              //Add the newly created reservedId
-                element.reservedId = reservedId;
-                //Replace the ids by their matching objects in the result
-                objects.forEach(key => {
-                  element[key] = request[key];
-                  delete element[key+'Id'];
-                });
-                //Add the arrays elements found to the newly created object
-                arrays.forEach(key => element[key] = request[key]);
-                //Link the newly created element to the arrays children via the association table
-                return sequence(arrays.map(key => () => driver.create({
-                  table : `${key}${tableName}`,
-                  elements : {
-                    [tableName+'Id'] : element.reservedId,
-                    [key+'Id'] : request[key].map(child => child.reservedId),
-                  }
-                })));
+            return driver.create({ table : tableName, elements })
+              .then((reservedIds) => {
+                return sequence(elements.map((elt,i) => () => {
+                  elt.created = true;
+                  //Add the newly created reservedId
+                  elt.reservedId[i] = reservedIds[i];
+                  //Replace the ids by their matching objects in the result
+                  objects.forEach(key => {
+                    elt[key] = request[key];
+                    delete elt[key+'Id'];
+                  });
+                  //Add the arrays elements found to the newly created object
+                  arrays.forEach(key => elt[key] = request[key]);
+                  //Add newly created elements to cache
+                  addCache(elt);
+                  //Link the newly created element to the arrays children via the association table
+                  return sequence(arrays.map(key => () => driver.create({
+                    table : `${key}${tableName}`,
+                    elements : {
+                      [tableName+'Id'] : elt.reservedId,
+                      [key+'Id'] : request[key].map(child => child.reservedId),
+                    }
+                  })));
+                }));
               })
-              .then(() => element.created = true)
-              .then(() => addCache(element))
-              .then(() => pluginCall(element, 'onCreation'))
-            //Return the element as results of the query
-              .then(() => [element]);
+              .then(() => pluginCall(elements, 'onCreation'))
+              //Return the elements as results of the query
+              .then(() => elements);
           });
         }
 
