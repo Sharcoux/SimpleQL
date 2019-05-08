@@ -1,4 +1,9 @@
-const mysql = require('mysql');
+const mysql = {};
+try {
+  Object.assign(mysql, require('mysql'));
+} catch(err) {
+  throw new Error('You must run `npm add mysql -S` to be able to use `mysql` database.');
+}
 const { isPrimitive, operators, sequence } = require('../utils');
 const log = require('../utils/logger');
 

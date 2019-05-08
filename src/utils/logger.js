@@ -14,8 +14,6 @@ const categories = {
   // 'login' : 'cyan',
 };
 
-console.error = () => console.log(new Error());
-
 function log(category, ...data) {
   const c = categories[category];
   if(c===undefined) return;
