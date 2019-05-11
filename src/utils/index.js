@@ -5,7 +5,7 @@ function isPrimitive(value) {
 }
 
 /** Returns the intersection between array1 and array2 */
-function restrictContent(array1, array2) {
+function intersection(array1, array2) {
   return array1.filter(elt => array2.includes(elt));
 }
 
@@ -84,7 +84,7 @@ function classifyRequestData(request, table) {
     message : `get property must be an array of string in table ${table.tableName} in request ${JSON.stringify(request)}.`,
   };
   //If the object or array key appears in the get instruction, we consider that we want to retrieve all the available data.
-  if(request.get) restrictContent([...tableData.objects, ...tableData.arrays], request.get).forEach(key => {
+  if(request.get) intersection([...tableData.objects, ...tableData.arrays], request.get).forEach(key => {
     if(request[key]) throw {
       name : BAD_REQUEST,
       message : `In table ${table.tableName}, the request cannot contain value ${key} both in the 'get' instruction and in the request itself.`,
@@ -94,10 +94,10 @@ function classifyRequestData(request, table) {
 
   //We restrict the request to only the field declared in the table
   //fields that we are trying to get info about
-  const search = restrictContent(request.get || [], tableData.primitives);
+  const search = intersection(request.get || [], tableData.primitives);
   
   //constraints for the research
-  const [primitives, objects, arrays] = ['primitives', 'objects', 'arrays'].map(key => restrictContent(tableData[key], Object.keys(request)));
+  const [primitives, objects, arrays] = ['primitives', 'objects', 'arrays'].map(key => intersection(tableData[key], Object.keys(request)));
   return { request, search, primitives, objects, arrays };
 }
 
@@ -106,7 +106,7 @@ const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', 
 
 module.exports = {
   isPrimitive,
-  restrictContent,
+  intersection,
   stringify,
   classifyData,
   classifyRequestData,

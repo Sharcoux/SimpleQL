@@ -35,6 +35,7 @@ function createServer({port = 443, tables = {}, database = {}, rules = {}, plugi
       allMiddlewares.forEach(m => app.use(m));
       //Listen to simple QL requests
       app.all('/', simpleQL(requestHandler));
+      //Add error handlers
       errorHandlers.forEach(h => app.use(h));
       //Final error handler, ditching error
       app.use((err, req, res, next) => next());

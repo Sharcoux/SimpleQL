@@ -17,6 +17,10 @@ SimpleQL is a NodeJS framework to create a server in 10 minutes that will handle
 npm install simple-ql -S
 ```
 
+### API
+
+Check the wiki (links are at the bottom of this page).
+
 ### Creating your server
 
 ```javascript
