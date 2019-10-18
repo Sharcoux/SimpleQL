@@ -660,7 +660,7 @@ function createTables({driver, tables, create}) {
     return acc;
   }, {});
   //Create the tables if needed
-  if(create) return Promise.all(Object.keys(data).map(tableName => {
+  if(create) return sequence(Object.keys(data).map(tableName => () => {
     //We retrieve tables indexes from the prepared table
     const index = data[tableName].index;
     delete data[tableName].index;

@@ -31,19 +31,15 @@ class Driver {
     this._createQuery = this._createQuery.bind(this);
     this._convertIntoCondition = this._convertIntoCondition.bind(this);
   }
-  query(query, trials = 3) {
+  query(query) {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(`timeout for requet ${query}`), 3000);
+      const timeout = setTimeout(() => reject(`timeout for requet ${query}`), 5000);
       log('database query', `Executing ${query}`);
       this.connection.query(query+';', (error, results) => {
         clearTimeout(timeout);
         if (error) reject(error);
         resolve(results);
       });
-    }).catch(err => {
-      console.error(err);
-      if(trials) return this.query(query, trials-1);
-      else return Promise.reject(err);
     });
   }
   destroy() {
@@ -169,7 +165,7 @@ class Driver {
     )`);
   }
   createForeignKeys(foreignKeys = {}) {
-    return Promise.all(Object.keys(foreignKeys).map(tableName => {
+    return sequence(Object.keys(foreignKeys).map(tableName => () => {
       const keys = Object.keys(foreignKeys[tableName]);
       const query = keys.map(key => `ADD CONSTRAINT FK_${tableName}_${key} FOREIGN KEY (${key}) REFERENCES ${foreignKeys[tableName][key]}(reservedId) ON DELETE CASCADE ON UPDATE CASCADE`).join(',\n       ');
       return this.query(`
@@ -247,6 +243,10 @@ module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host
     const driver = new Driver(pool);
     //Destroy previous database if required
     return driver.query(`DROP DATABASE IF EXISTS ${database}`)
+      .catch(err => {
+        if(err.code === 'ECONNREFUSED') return Promise.reject(`Failed to connect to the database. Make sure that you have a MySQL database running on port ${err.port} of host ${err.address}.`);
+        else return Promise.reject(err);
+      })
       //Create the database
       .then(() => driver.query(`CREATE DATABASE IF NOT EXISTS ${database} CHARACTER SET ${charset}`))
       .then(() => log('info', `Brand new ${database} database successfully created!`));
