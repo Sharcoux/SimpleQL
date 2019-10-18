@@ -223,4 +223,4 @@ const plugins = [
   customPlugin,
 ];
 
-module.exports = () => createServer({port : 80, tables, database, rules, plugins});
+module.exports = () => createServer({ports : 80, tables, database, rules, plugins});

@@ -14,7 +14,7 @@ module.exports = {
   plugins,
 };
 
-function createServer({port = 443, tables = {}, database = {}, rules = {}, plugins = [], middlewares = [], errorHandler}) {
+function createServer({ports = [80, 443], tables = {}, database = {}, rules = {}, plugins = [], middlewares = [], errorHandler}) {
   const allMiddlewares = plugins.map(plugin => plugin.middleware).filter(mw => mw).concat(middlewares);
   const errorHandlers = plugins.map(plugin => plugin.errorHandler).filter(mw => mw);
   errorHandlers.push(errorHandler || defaultErrorHandler);
@@ -26,7 +26,9 @@ function createServer({port = 443, tables = {}, database = {}, rules = {}, plugi
       log('info', `${database.database} database ready to be used!`);
       //Start the server
       const app = express();
-      app.listen(port);
+      if(!isNaN(ports)) app.listen(ports);
+      else if(!(ports instanceof Array) || ports.find(isNaN) || ports.length===0) return Promise.reject('ports must be an array of Numbers');
+      else ports.map(port => app.listen(port));
       // parse application/x-www-form-urlencoded
       app.use(bodyParser.urlencoded({ extended: false }));
       // parse application/json
