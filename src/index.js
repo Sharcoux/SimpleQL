@@ -1,4 +1,3 @@
-const express = require('express');
 const { createDatabase } = require('./database');
 const errors = require('./errors');
 const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, DATABASE_ERROR, FORBIDDEN, UNAUTHORIZED, WRONG_PASSWORD, ACCESS_DENIED } = errors;
@@ -14,21 +13,17 @@ module.exports = {
   plugins,
 };
 
-function createServer({ports = [80, 443], tables = {}, database = {}, rules = {}, plugins = [], middlewares = [], errorHandler}) {
+function createServer({tables = {}, database = {}, rules = {}, plugins = [], middlewares = [], errorHandler, app}) {
   const allMiddlewares = plugins.map(plugin => plugin.middleware).filter(mw => mw).concat(middlewares);
   const errorHandlers = plugins.map(plugin => plugin.errorHandler).filter(mw => mw);
   errorHandlers.push(errorHandler || defaultErrorHandler);
+  if(!app || !app.use || !app.all) return Promise.reject('app parameter is required and should be an express app created with express().')
   //Check data
   return checkParameters({tables, database, rules, plugins})
     //Create the database
     .then(() => createDatabase({tables, database, rules, plugins}))
     .then(requestHandler => {
       log('info', `${database.database} database ready to be used!`);
-      //Start the server
-      const app = express();
-      if(!isNaN(ports)) app.listen(ports);
-      else if(!(ports instanceof Array) || ports.find(isNaN) || ports.length===0) return Promise.reject('ports must be an array of Numbers');
-      else ports.map(port => app.listen(port));
       // parse application/x-www-form-urlencoded
       app.use(bodyParser.urlencoded({ extended: false }));
       // parse application/json

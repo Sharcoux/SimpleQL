@@ -31,8 +31,19 @@ const login = {
   strict : true,
 };
 
+const security = {
+  app: {
+    listen: 'function',
+  },
+  domains: ['string'],
+  emailACME: 'string',
+  required: ['app', 'domains', 'emailACME'],
+  strict: true,
+}
+
 module.exports = {
   dbColumn,
   database,
   login,
+  security,
 };

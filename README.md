@@ -25,6 +25,7 @@ Check the wiki (links are at the bottom of this page).
 
 ```javascript
 const { createServer } = require('simple-ql');
+const express = require('express');
 
 //Prepare your tables
 const tables = {
@@ -51,7 +52,9 @@ const plugins = [
     ...
 ]
 
-createServer({ports : [80, 443], tables, database, rules, plugins})
+const app = express();
+app.listen(80);
+createServer({app, tables, database, rules, plugins});
 ```
 
 **Note:** You can also add a list of *express* **middlewares** and an **error handler** directly as parameter of the `createServer` function:
@@ -60,7 +63,7 @@ createServer({ports : [80, 443], tables, database, rules, plugins})
 const middleware = (req, res, next) => next();
 const middlewares = [middleware];
 const errorHandler = (err, req, res, next) => next(err);
-createServer({ports : [80, 443], tables, database, rules, plugins, middlewares, errorHandler});
+createServer({app, tables, database, rules, plugins, middlewares, errorHandler});
 ```
 
 **Example:** [You can find here a full example of a messenger-like SimpleQL server configuration](https://github.com/Sharcoux/SimpleQL/blob/master/example.js)

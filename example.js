@@ -1,5 +1,6 @@
 // const { createServer, is, or, member, count, none, all, not, and, plugins : { loginPlugin } } = require('simple-ql');
 const { createServer, is, or, member, count, none, all, not, and, plugins : { loginPlugin } } = require('./src');
+const express = require('express');
 
 /*************************************************************************
  *************************** TABLES DECLARATION **************************/
@@ -223,4 +224,6 @@ const plugins = [
   customPlugin,
 ];
 
-module.exports = () => createServer({ports : 80, tables, database, rules, plugins});
+const app = express();
+app.listen(80);
+module.exports = () => createServer({app, tables, database, rules, plugins});

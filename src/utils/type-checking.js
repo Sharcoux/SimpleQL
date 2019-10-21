@@ -11,6 +11,16 @@ function checkType(model, data) {
     //If the data is a function we ensure that the model is 'function'
   } else if(data instanceof Function) {
     if(model!=='function') throw generateError(formatModel(model), data);
+    //If the data is an array, we ensure that the model is an array containg the type of the data's content
+  } else if(data instanceof Array) {
+    if(!(model instanceof Array)) throw generateError(formatModel(model), data);
+    let index = 0;
+    try {
+      data.forEach((d, i) => {index=i;checkType(model[0], d);});
+    } catch(err) {
+      const {expected, received, path} = err;
+      throw generateError(expected, received, '['+index+']'+(path ? '.'+path : ''));
+    }
     //If the data id an object we ensure that the model is an object matching the data
   } else if(data!==null && data instanceof Object) {
     if(!(model instanceof Object)) throw generateError(formatModel(model), stringify(data) + '\n', '');
@@ -69,7 +79,10 @@ function check(model, data) {
 
 /** format a model into human readable json object */
 function formatModel(model) {
-  if(model instanceof Object) {
+  if(model instanceof Array) {
+    return `[${formatModel(model[0])}]`;
+  }
+  else if(model instanceof Object) {
     const required = model.required || [];
     const strict = model.strict;
     const formatted = Object.keys(model).reduce((acc, key) => {
