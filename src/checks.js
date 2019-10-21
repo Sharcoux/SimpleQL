@@ -24,7 +24,7 @@ function checkTables(tables) {
       //Is the length required and provided
       if(lengthRequired.includes(type) && !length) return Promise.reject(`${field} column of type ${type} requires a length parameter in ${tableName}`);
       //Is the type numeric when unsigned is provided
-      if(numeric.includes(type) && unsigned) return Promise.reject(`column ${field} is of type ${type} which doesn't accept unsigned flag.`);
+      if(!numeric.includes(type) && unsigned) return Promise.reject(`column ${field} is of type ${type} which doesn't accept unsigned flag.`);
 
       //We check for each type that the size property is valid
       switch(type) {
