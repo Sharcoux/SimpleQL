@@ -72,7 +72,8 @@ const rules = {
       read : none,          //no one can read the password
     },
     salt : {
-      read : none,          //no one can read the password
+      read : none,          //no one can read the salt
+      write : none,          //no one can write the salt
     },
     contacts : {
       add : and(

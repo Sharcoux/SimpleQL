@@ -37,6 +37,7 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
       //Final error handler, ditching error
       app.use((err, req, res, next) => next());
       log('info', 'Simple QL server ready!');
+      return requestHandler;
     });
 }
 

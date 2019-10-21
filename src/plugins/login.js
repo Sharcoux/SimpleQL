@@ -168,13 +168,15 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
       }
     },
     onCreation: {
-      [userTable] : (object, { update }) => {
-        const reservedId = object.reservedId;
+      [userTable] : (createdObject, { update }) => {
+        const reservedId = createdObject.reservedId;
+        //Once the user is created inside the database, we set the authId to treat each further command on his behalf
         update('authId', reservedId);
         return createJWT(reservedId)
           .then(jwt => {
-            object.jwt = jwt;
-            return object;
+            //Add the jwt to the created object
+            createdObject.jwt = jwt;
+            return createdObject;
           });
       }
     },
@@ -184,6 +186,7 @@ function createLocalLogin({login = 'email', password = 'password', salt = 'salt'
           const id = result.reservedId;
           const tokens = read('jwt') || {};
           if(tokens[id]) {
+            //In case of multiple user creation, set the jwt in the result of each request.
             result.jwt = tokens[id];
             delete tokens[id];
           }
