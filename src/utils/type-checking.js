@@ -10,10 +10,10 @@ function checkType(model, data) {
     throw generateError(formatModel(model), stringify(data), '');
     //If the data is a function we ensure that the model is 'function'
   } else if(data instanceof Function) {
-    if(model!=='function') throw generateError(formatModel(model), data);
+    if(model!=='function') throw generateError(formatModel(model), data, '');
     //If the data is an array, we ensure that the model is an array containg the type of the data's content
   } else if(data instanceof Array) {
-    if(!(model instanceof Array)) throw generateError(formatModel(model), data);
+    if(!(model instanceof Array)) throw generateError(formatModel(model), data, '');
     let index = 0;
     try {
       data.forEach((d, i) => {index=i;checkType(model[0], d);});

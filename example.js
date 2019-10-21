@@ -215,6 +215,9 @@ const customPlugin = {
   }
 };
 
+const app = express();
+app.listen(80);
+
 const plugins = [
   loginPlugin({
     login: 'email',
@@ -225,6 +228,4 @@ const plugins = [
   customPlugin,
 ];
 
-const app = express();
-app.listen(80);
 module.exports = () => createServer({app, tables, database, rules, plugins});

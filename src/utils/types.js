@@ -19,7 +19,7 @@ const database = {
   create : 'boolean',
   charset : 'string',
   connectionLimit : 'integer',
-  required : ['user', 'password', 'type', 'privateKey', 'host'],
+  required : ['user', 'password', 'type', 'privateKey', 'host', 'database'],
 };
 
 const login = {
@@ -32,9 +32,7 @@ const login = {
 };
 
 const security = {
-  app: {
-    listen: 'function',
-  },
+  app: 'function',
   domains: ['string'],
   emailACME: 'string',
   required: ['app', 'domains', 'emailACME'],
