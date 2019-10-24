@@ -64,6 +64,35 @@ createTestServer()
   //Use the jwt for user1 
   .then(response => axios.defaults.headers.common['Authorization'] = 'Bearer ' + response.data.User[0].jwt)
 
+  //Getting accessible users with their contacts
+  .then(() => Promise.resolve()
+    .then(() => log('test title', '\n', 'Getting user with their contacts'))
+    .then(() => request({
+      User : {
+        contacts: {
+          email: 'user2@email.com',
+          get: '*',
+        }
+      }
+    }))
+    .then(logResponse)
+  )
+  
+  //Getting only users that have contacts
+  .then(() => Promise.resolve()
+    .then(() => log('test title', '\n', 'Getting only users that have user2 as a contact'))
+    .then(() => request({
+      User : {
+        contacts: {
+          email: 'user2@email.com',
+          get: '*',
+          required: true,
+        }
+      }
+    }))
+    .then(logResponse)
+  )
+  
   //Retrieve all current user info
   .then(() => Promise.resolve()
     .then(() => log('test title', '\n', 'Retrive current profile'))

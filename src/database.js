@@ -42,7 +42,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
    * @returns {Object} The full result of the request
    */
   function request(authId, request) {
-
+    if(!request) return Promise.reject(`The request is ${request}. You probably forgot to indicate the first parameter: authId. This parameter determines the access rights. It should be set to database.privateKey for admin rights, undefined for public rights, or to a user Id to simulate this user's credentials.`);
     const cache = {};
     //We start a transaction to resolve the request
     return driver.startTransaction()
@@ -378,10 +378,16 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           return sequence(objects.map(key => () => sequence(results.map(result => () => {
             request[key].reservedId = result[key+'Id'];
             return applyInTable(request[key], table[key].tableName).then(objects => {
-              if(objects.length===0) return Promise.reject({
-                name: NOT_FOUND,
-                message: `Nothing found with these constraints : ${tableName}->${key}->${JSON.stringify(request[key])}`,
-              });
+              if(objects.length===0) {
+                if(request[key]==='required') return Promise.reject({
+                  name: NOT_FOUND,
+                  message: `Nothing found with these constraints : ${tableName}->${key}->${JSON.stringify(request[key])}`,
+                });
+                else {
+                  result[key] = null;
+                  return result;
+                }
+              }
               else if(objects.length>1) return Promise.reject({
                 name: DATABASE_ERROR,
                 message: `We found more than one object for key ${key} with the id ${result[key+'Id']} in table ${table[key].tableName}`,
@@ -418,8 +424,8 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                 })
             ))
           ))
-          //We keep only the results that have a matching solution in the table for each array's constraint
-            .then(() => results.filter(result => realArrays.every(key => result[key].length)));
+          //If the constraint is 'required', we keep only the results that have a matching solution in the table for each array's constraint
+            .then(() => results.filter(result => realArrays.every(key => !request[key].required || result[key].length)));
         }
 
         /** Remove elements from the table if request.delete is defined */
