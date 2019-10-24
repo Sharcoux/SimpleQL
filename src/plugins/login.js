@@ -69,7 +69,7 @@ function createHash(password, salt) {
  * @param {string} password The column that will store the user's password
  * @param {string} salt The column that will store the random generated salt for the password (optional)
  */
-function createLocalLogin({login = 'email', password = 'password', salt = 'salt', userTable = 'User'}) {
+function createLocalLogin({login = 'email', password = 'password', salt, userTable = 'User'}) {
   check(loginModel, {login, password, salt, userTable});
   return {
     middleware: (req, res, next) => {

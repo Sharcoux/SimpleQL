@@ -29,7 +29,7 @@ function prepareTables(tables) {
             else if(primitives.includes(value)) result.column = value;
             //Index type
             else if(['unique', 'fulltext', 'spatial'].includes(value)) result.type = value;
-            else throw new Error(`The value ${value} for index of table ${table} could not be interpreted, nor as a type, nor as a column, nor as a length. Check the documentation.`);
+            else throw new Error(`The value ${value} for index of table ${table.tableName} could not be interpreted, nor as a type, nor as a column, nor as a length. Check the documentation.`);
             return result;
           }, {});
         } else return elt;
