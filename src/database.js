@@ -227,10 +227,10 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           return checkEntry(request, primitives, objects, arrays)
             .then(() => {
             //Only one instructions among create, delete, get in each request
-              if(!!request.create + !!request.delete + !!request.get > 1) {
+              if(request.create && request.delete) {
                 return Promise.reject({
                   name : BAD_REQUEST,
-                  message : `Each request can contain only one among 'create', 'delete' or 'get'. The request was : ${JSON.stringify(request)}.`,
+                  message : `Each request can contain only one among 'create' or 'delete'. The request was : ${JSON.stringify(request)}.`,
                 });
               }
               //Check that set instruction is acceptable
@@ -437,7 +437,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             table : tableName,
             where : {reservedId: results.map(r => r.reservedId)},
           })
-          //Mark the results are deleted inside the results
+          //Mark the results as deleted inside the results
             .then(() => results.forEach(result => result.deleted = true))
             .then(() => results.forEach(uncache))//The content is not anymore in the database. Data became unsafe.
             .then(() => pluginCall(results, 'onDeletion'))

@@ -147,7 +147,7 @@ function createLocalLogin({login = 'email', password = 'password', salt, userTab
             //We compare the password provided with the hash in the database
             const { reservedId, password: hashedPass, salt: saltString } = results[0];
             update('authId', reservedId);
-            return createHash(request[password], saltString.toString('hex')).then(hash => {
+            return createHash(request[password], (saltString || '').toString('hex')).then(hash => {
               if(hash.equals(hashedPass)) {
                 delete request[password];
                 request.reservedId = reservedId;

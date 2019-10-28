@@ -25,9 +25,9 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
     .then(requestHandler => {
       log('info', `${database.database} database ready to be used!`);
       // parse application/x-www-form-urlencoded
-      app.use(bodyParser.urlencoded({ extended: false }));
+      app.use('/', bodyParser.urlencoded({ extended: false }));
       // parse application/json
-      app.use(bodyParser.json());
+      app.use('/', bodyParser.json());
       //Add the middlewares
       allMiddlewares.forEach(m => app.use(m));
       //Listen to simple QL requests
@@ -35,7 +35,7 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
       //Add error handlers
       errorHandlers.forEach(h => app.use(h));
       //Final error handler, ditching error
-      app.use((err, req, res, next) => next());
+      app.use('/', (err, req, res, next) => next());
       log('info', 'Simple QL server ready!');
       return requestHandler;
     });
