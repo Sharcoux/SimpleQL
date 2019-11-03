@@ -379,14 +379,10 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             request[key].reservedId = result[key+'Id'];
             return applyInTable(request[key], table[key].tableName).then(objects => {
               if(objects.length===0) {
-                if(request[key]==='required') return Promise.reject({
+                return Promise.reject({
                   name: NOT_FOUND,
                   message: `Nothing found with these constraints : ${tableName}->${key}->${JSON.stringify(request[key])}`,
                 });
-                else {
-                  result[key] = null;
-                  return result;
-                }
               }
               else if(objects.length>1) return Promise.reject({
                 name: DATABASE_ERROR,
