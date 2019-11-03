@@ -107,8 +107,8 @@ In one request, we are getting all the messages from `user2@email.com` published
 
 ## To go deeper
 
-### [Prepare your tables](https://github.com/Sharcoux/SimpleQL/wiki/tables-configuration)
-### [Setup access to your database (like MYSQL)](https://github.com/Sharcoux/SimpleQL/wiki/access-to-database)
-### [Setting access rights](https://github.com/Sharcoux/SimpleQL/wiki/setting-access-rights)
-### [Adding plugins](https://github.com/Sharcoux/SimpleQL/wiki/adding-plugins)
-### [Requesting your database](https://github.com/Sharcoux/SimpleQL/wiki/simpleql-requests)
+### [Prepare your tables](docs/tables.md)
+### [Setup access to your database (like MYSQL)](docs/database.md)
+### [Setting access rights](docs/access.md)
+### [Adding plugins](docs/plugins.md)
+### [Requesting your database](docs/requests.md)
