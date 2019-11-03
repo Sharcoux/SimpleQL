@@ -117,9 +117,9 @@ const rules = {
       write : none,         //The author of a message cannot be changed
     },
     delete : is('author'),  //Only the author of a message can delete it
-    create : is('author'),   //To create a message, you need to declare yourself as the author
-    write : is('author'),    //Only the author can edit their messages
-    read : customRule                 //Only the feed's participants can read the message content ////FIXME TODO
+    create : is('author'),  //To create a message, you need to declare yourself as the author
+    write : is('author'),   //Only the author can edit their messages
+    read : customRule       //Only the feed's participants can read the message content
   },
 };
 
@@ -133,9 +133,13 @@ function customRule() {
     return query({
       //We look for feeds containing that comment, and the author as participant
       Feed: {
-        comments: { reservedId : object.reservedId },
+        comments: {
+          reservedId : object.reservedId,
+          required: true,
+        },
         participants: {
           reservedId : authId,
+          required: true,
         }
       }
     },
@@ -163,7 +167,7 @@ const customPlugin = {
           if(request.email) user.email = request.email;
           if(request.pseudo) user.pseudo = request.pseudo;
           //We check if an invitation has already been made
-          return query({ User : {...request.contacts.add, invited : user} }, {admin : true, readOnly : true})
+          return query({ User : {...request.contacts.add, invited : { ...user, required: true } } }, {admin : true, readOnly : true})
             //Check if the user invited us and deny the request otherwise
             .then(({User : contacts}) => {
               //The contact didn't invite you yet. We cannot accept this request
@@ -183,7 +187,7 @@ const customPlugin = {
           if(request.invited.add.email) contact.email = request.invited.add.email;
           if(request.invited.add.pseudo) contact.pseudo = request.invited.add.pseudo;
           //Looking for contact data
-          return query({User : { ...user, contacts : contact }}, { readOnly : true })
+          return query({User : { ...user, contacts : {...contact, required: true} }}, { readOnly : true })
             .then(({ User : users }) => {
               if(users.length) return Promise.reject({name : 'alreadyAContact', status : 403, message : 'You cannot invite a user if they are already in your contacts list.'});
               //We insert the invitation manually with admin rights because the user would not have enough credence.
@@ -218,14 +222,24 @@ const customPlugin = {
 const app = express();
 app.listen(80);
 
-const plugins = [
-  loginPlugin({
+const plugins = [];
+
+//Add a plugin enforcing default security parameters in production
+if(process.env.NODE_ENV==='production') plugins.push(securityPlugin({
+  app,
+  domains: ['mydomain.com', 'www.mydomain.com'],
+  emailACME: 'webmaster@mydomain.com',
+}));
+
+//Add a plugin that enables basic login/password authentication
+plugins.push(loginPlugin({
     login: 'email',
     password: 'password',
     salt: 'salt',
     userTable: 'User',
-  }),
-  customPlugin,
-];
+}));
+
+//Add our custom plugin to handle specific behaviours for some requests
+plugins.push(customPlugin);
 
 module.exports = () => createServer({app, tables, database, rules, plugins});

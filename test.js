@@ -159,7 +159,7 @@ createTestServer()
   //Use the jwt for user12
   .then(response => axios.defaults.headers.common['Authorization'] = 'Bearer ' + response.data.User[0].jwt)
 
-  //Adding a user not invited as contact
+  //Adding a user invited as contact
   .then(() => Promise.resolve()
     .then(() => log('test title', '\n', 'Adding a contact'))
     .then(() => request({
@@ -247,7 +247,7 @@ createTestServer()
     .catch(logError)
   )
 
-  //Forbidden : editing our personal data
+  //Editing our personal data
   .then(() => Promise.resolve()
     .then(() => log('test title', '\n', 'Edit our personal data'))
     .then(() => request({
@@ -271,6 +271,21 @@ createTestServer()
       }
     }))
     .catch(logError)
+  )
+
+  //Deleting our own message
+  .then(() => Promise.resolve()
+    .then(() => log('test title', '\n', 'Deleting our own data'))
+    .then(() => request({
+      Comment: {
+        author: {
+          email : 'user2@email.com',
+          required: true,
+        },
+        delete: true,
+      }
+    }))
+    .then(logResponse)
   )
 
   //Deleting user
