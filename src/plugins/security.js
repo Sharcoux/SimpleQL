@@ -6,7 +6,7 @@ function missing(dep) {
     throw new Error(`You should add ${dep} to your dependencies to use the SecurityPlugin. Run\nnpm i -D ${dep}`);
 }
 
-const createSecurityPlugin = ({app, domains, emailACME }) => {
+const createSecurityPlugin = ({app, domains, emailACME, requestPerMinute, helmet : helmetConfig }) => {
     check(securityModel, {app, domains, emailACME});
     
     const RateLimit = require('express-rate-limit');
@@ -23,7 +23,7 @@ const createSecurityPlugin = ({app, domains, emailACME }) => {
     /** Limit the amount of request the server should handle per minute */
     const apiLimiter = new RateLimit({
         windowMs: 60*1000, // 1 minute
-        max: 100,
+        max: requestPerMinute || 1000,
     });
   
     /** Redirects all requests to https */
@@ -50,7 +50,7 @@ const createSecurityPlugin = ({app, domains, emailACME }) => {
         })
         .listen(80, 443);
     return {
-        middleware: cm.compose([apiLimiter, helmet()])
+        middleware: requestPerMinute ? cm.compose([apiLimiter, helmet(helmetConfig)]) : helmet(helmetConfig)
     }
 }
 

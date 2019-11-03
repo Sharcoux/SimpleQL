@@ -35,6 +35,7 @@ const security = {
   app: 'function',
   domains: ['string'],
   emailACME: 'string',
+  requestPerMinute: 'number',
   required: ['app', 'domains', 'emailACME'],
   strict: true,
 }
