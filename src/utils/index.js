@@ -101,6 +101,15 @@ function classifyRequestData(request, table) {
   return { request, search, primitives, objects, arrays };
 }
 
+function getOptionalDep(dep, requester) {
+  try {
+      const dep = require(dep);
+      return dep;
+  } catch(err) {
+      throw new Error(`You should add ${dep} to your dependencies to use ${requester}. Run\nnpm i -D ${dep}`);
+  }
+}
+
 const reservedKeys = ['reservedId', 'set', 'get', 'created', 'deleted', 'edited', 'delete', 'create', 'add', 'remove', 'not', 'like', 'or', 'limit', 'offset', 'tableName', 'foreignKeys', 'type', 'parent', 'index', 'reserved', 'required'];
 const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', '~', '!'];
 
@@ -114,4 +123,5 @@ module.exports = {
   operators,
   any,
   sequence,
+  getOptionalDep,
 };

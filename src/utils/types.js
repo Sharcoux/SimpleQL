@@ -23,10 +23,17 @@ const database = {
 };
 
 const login = {
-  login: 'string', 
+  login: 'string',
   password: 'string',
   salt: 'string',
   userTable: 'string',
+  firstname: 'string',
+  lastname: 'string',
+  plugin: {
+    google: 'string',
+    facebook: 'string',
+    strict: true,
+  },
   required : ['login', 'password', 'userTable'],
   strict : true,
 };
@@ -45,4 +52,5 @@ module.exports = {
   database,
   login,
   security,
+  googleLogin
 };

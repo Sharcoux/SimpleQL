@@ -1,24 +1,16 @@
 const { security : securityModel } = require('../utils/types');
 const check = require('../utils/type-checking');
 const log = require('../utils/logger');
+const { getOptionalDep } = require('../utils');
 
-function missing(dep) {
-    throw new Error(`You should add ${dep} to your dependencies to use the SecurityPlugin. Run\nnpm i -D ${dep}`);
-}
-
-const createSecurityPlugin = ({app, domains, emailACME, requestPerMinute, helmet : helmetConfig }) => {
-    check(securityModel, {app, domains, emailACME});
-    
-    const RateLimit = require('express-rate-limit');
-    const cm = require('compose-middleware');
-    const helmet = require('helmet');
-    const greenlock = require("greenlock-express");
-    const greenlockStore = require("greenlock-store-fs");
-    if(!RateLimit) missing('express-rate-limit');
-    if(!cm) missing('compose-middleware');
-    if(!helmet) missing('helmet');
-    if(!greenlock) missing('greenlock-express');
-    if(!greenlockStore) missing('greenlock-store-fs');
+const createSecurityPlugin = config => {
+    check(securityModel, config);
+    const {app, domains, emailACME, requestPerMinute, helmet : helmetConfig } = config;
+    const RateLimit = getOptionalDep('express-rate-limit', 'SecurityPlugin');
+    const cm = getOptionalDep('compose-middleware', 'SecurityPlugin');
+    const helmet = getOptionalDep('helmet', 'SecurityPlugin');
+    const greenlock = getOptionalDep('greenlock-express', 'SecurityPlugin');
+    const greenlockStore = getOptionalDep('greenlock-store-fs', 'SecurityPlugin');
     
     /** Limit the amount of request the server should handle per minute */
     const apiLimiter = new RateLimit({

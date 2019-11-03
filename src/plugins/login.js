@@ -3,12 +3,10 @@ const crypto = require('crypto');
 const check = require('../utils/type-checking');
 const { login : loginModel , dbColumn } = require('../utils/types');
 const logger = require('../utils/logger');
-const jwt = {};
-try {
-  Object.assign(jwt, require('jsonwebtoken'));
-} catch(err) {
-  throw new Error('You need to add jsonwebtoken as a dependency to your project to use the login pluggin.', err);
-} 
+const { getOptionalDep } = require('../utils');
+
+const jwt = getOptionalDep('jsonwebtoken', 'LoginPlugin');
+
 const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
   modulusLength: 4096,
   publicKeyEncoding: {
@@ -33,6 +31,13 @@ function checkType(field, table, expectedType, minSize, tableName) {
   check(dbColumn, data);
   if(!data.length || parseInt(data.length, 10)<minSize) throw new Error(`${data} in ${tableName} should have a length of a at least ${minSize}`);
   return true;
+}
+
+function isString(key, value, table) {
+  if(!(Object(value) instanceof String)) throw new Error({
+    name : BAD_REQUEST,
+    message : `${key} is expected to be of type String in ${table}, but we received ${value}`,
+  });
 }
 
 function createJWT(id) {
@@ -69,8 +74,13 @@ function createHash(password, salt) {
  * @param {string} password The column that will store the user's password
  * @param {string} salt The column that will store the random generated salt for the password (optional)
  */
-function createLocalLogin({login = 'email', password = 'password', salt, userTable = 'User'}) {
-  check(loginModel, {login, password, salt, userTable});
+function createLocalLogin(config) {
+  check(loginModel, config);
+  const { login = 'email', password = 'password', salt, userTable = 'User', firstname, lastname, plugins: { google, facebook } = {} } = config;
+
+  let axios;
+  if(google || facebook) axios = getOptionalDep('axios', 'GooglePlugin');
+
   return {
     middleware: (req, res, next) => {
       const token = req.headers && req.headers.authorization && req.headers.authorization.split(' ')[1];
@@ -90,6 +100,8 @@ function createLocalLogin({login = 'email', password = 'password', salt, userTab
         checkType(login, table, 'string', 1, userTable);
         checkType(password, table, 'binary', 64, userTable);
         if(salt) checkType(salt, table, 'binary', 16, userTable);
+        if (firstname) checkType(firstname, table, 'string', 1, userTable);
+        if (lastname) checkType(lastname, table, 'string', 1, userTable);
       } catch(err) {
         Promise.reject(err);
       }
@@ -99,71 +111,119 @@ function createLocalLogin({login = 'email', password = 'password', salt, userTab
       [userTable] : (request, {query, update, read}) => {
         //Creating a user
         if(request.create) {
-          //Someone is trying to register. We will hash the pwd and add a salt string if required
-          const { [login]: log, [password]: pass } = request;
-          logger('info', log, 'is being created');
-          //Missing login or password
-          if(!log || !pass) return Promise.reject({
-            name : BAD_REQUEST,
-            message : `You need a ${login} and a ${password} to create an element inside ${userTable}`,
-          });
-
-          //Wrong type for login or password
-          if(!(Object(log) instanceof String) || !(Object(pass) instanceof String)) return Promise.reject({
-            name : BAD_REQUEST,
-            message : `${login} and ${password} are required to be of type String in ${userTable}, but we received ${log} and ${pass}`,
-          });
-
-          // creating a unique salt for a particular user 
-          const saltBinary = salt ? crypto.randomBytes(16) : ''; 
-          // hashing user's salt and password with 1000 iterations, 64 length and sha512 digest 
-          return createHash(pass, saltBinary.toString('hex')).then(hash => {
-            if(salt) request[salt] = saltBinary;
-            request[password] = hash;
-          });
-
-        //Logging a user
-        } else if(request[login] && request[password] && !request.create) {
-          logger('info', request[login], 'is trying to log in');
-          //Someone is trying to log in. We retrieve their data
-          const get = [password, 'reservedId'];
-          if(salt) get.push(salt);//We might need the salt if required
-          return query({
-            [userTable] : {
-              [login] : request[login],
-              get,
-            }
-          }, {readOnly : true, admin : true}).then(({[userTable] : results}) => {
-            //No user with this login
-            if(results.length===0) {
-              return Promise.reject({
-                name : NOT_FOUND,
-                message : `user ${request[login]} not found`,
+          return Promise.resolve().then(() => {
+            if(google && request[google]) {
+              //Someone is trying to register with google
+              isString(google, request[google], userTable);
+              return axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${request[google]}`).then(googleUserInfos => {
+                request[login] = googleUserInfos.data.email
+                if(firstname) request[firstname] = googleUserInfos.data.given_name
+                if(lastname) request[lastname] = googleUserInfos.data.family_name
+                request[password] = 'google';//As this is not a hash, no one will be able to connect with this without the access token
               });
-            } else if(results.length>1) {
-              return Promise.reject('Should totally not be possible');
+            } else if(facebook && request[facebook] && request[login]) {
+              //Someone is trying to register with facebook
+              isString(login, request[login], userTable);
+              isString(facebook, request[facebook], userTable);
+              return axios.get(`https://graph.facebook.com/${facebook_user_id}?fields=short_name,last_name,email,name&access_token=${facebook_access_token}`).then(result => {
+                request[login] = result.email;
+                if(firstname) request[firstname] = result.short_name;
+                if(lastname) request[lastname] = result.last_name;
+                request[password] = 'facebook';//As this is not a hash, no one will be able to connect with this without the access token
+              });
+            } else if(request[login] && request[password]) {
+              //Someone is trying to register with login/password. We will hash the pwd and add a salt string if required
+              isString(login, request[login], userTable);
+              isString(password, request[password], userTable);
+              // creating a unique salt for a particular user
+              const saltBinary = salt ? crypto.randomBytes(16) : '';
+              // hashing user's salt and password with 1000 iterations, 64 length and sha512 digest
+              return createHash(request[password], saltBinary.toString('hex')).then(hash => {
+                if(salt) request[salt] = saltBinary;
+                request[password] = hash;
+              });
+            } else {
+              //Missing subscription details
+              const googleOption = google ? `, or a ${google}` : '';
+              const facebookOption = facebook ? `, or a ${facebook}` : '';
+              const message = `You need a ${login} and a ${password}${googleOption}${facebookOption} to create an element inside ${userTable}`;
+              return Promise.reject({
+                name : BAD_REQUEST,
+                message,
+              });
             }
-
-            //We compare the password provided with the hash in the database
-            const { reservedId, password: hashedPass, salt: saltString } = results[0];
-            update('authId', reservedId);
-            return createHash(request[password], (saltString || '').toString('hex')).then(hash => {
-              if(hash.equals(hashedPass)) {
+          }).then(() => {
+            logger('info', request[login], 'is being created');
+          });
+        //Logging a user
+        } else {
+          return Promise.resolve().then(() => {
+            if(google && request[google]) {
+              //Someone is trying to login with google
+              isString(google, request[google], userTable);
+              return axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${request[google]}`).then(googleUserInfos => {
+                request[login] = googleUserInfos.data.email
+                request[password] = 'google';
+              });
+            } else if(facebook && request[login] && request[facebook]) {
+              isString(login, request[login], userTable);
+              isString(facebook, request[facebook], userTable);
+              return axios.get(`https://graph.facebook.com/${facebook_user_id}?fields=short_name,last_name,email,name&access_token=${facebook_access_token}`).then(result => {
+                request[login] = result.email;
+                request[password] = 'facebook';//As this is not a hash, no one will be able to connect with this without the access token
+              });
+            }
+          }).then(() => {
+            if(request[login] && request[password]) {
+              //Someone is trying to log in. We retrieve their data
+              const get = [password, 'reservedId'];
+              if(salt) get.push(salt);//We might need the salt if required
+              return query({
+                [userTable] : {
+                  [login] : request[login],
+                  get,
+                }
+              }, {readOnly : true, admin : true}).then(({[userTable] : results}) => {
+                //No user with this login
+                if(results.length===0) {
+                  return Promise.reject({
+                    name : NOT_FOUND,
+                    message : `${userTable} ${request[login]} not found`,
+                  });
+                } else if(results.length>1) {
+                  return Promise.reject('Should totally not be possible');
+                } else {
+                  //We compare the password provided with the hash in the database
+                  if(request[password]==='google' || request[password]==='facebook') {
+                    return Promise.resolve(results[0]);
+                  } else {
+                    const { password: hashedPass, salt: saltString } = results[0];
+                    return createHash(request[password], (saltString || '').toString('hex')).then(hash => {
+                      if(hash.equals(hashedPass)) {
+                        return Promise.resolve(results[0]);
+                      } else {
+                        return Promise.reject({
+                          name : WRONG_PASSWORD,
+                          message : `Wrong password provided for user ${request[login]}`,
+                        });
+                      }
+                    });
+                  }
+                }
+              }).then(({reservedId}) => {
                 delete request[password];
                 request.reservedId = reservedId;
                 const tokens = read('jwt') || {};
+                update('authId', reservedId);
                 //If the log succeeds, we return a jwt token
                 return createJWT(reservedId)
                   .then(jwtToken => tokens[reservedId] = jwtToken)
                   .then(() => update('jwt', tokens));
-              } else {
-                return Promise.reject({
-                  name : WRONG_PASSWORD,
-                  message : `Wrong password provided for user ${request[login]}`,
-                });
-              }
-            });
-          });
+              }).then(() => {
+                logger('info', request[login], 'just logged in');
+              });
+            }
+          })
         }
       }
     },
@@ -197,4 +257,7 @@ function createLocalLogin({login = 'email', password = 'password', salt, userTab
   };
 }
 
-module.exports = createLocalLogin;
+module.exports = {
+  createLocalLogin,
+  privateKey
+};
