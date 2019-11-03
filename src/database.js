@@ -105,10 +105,10 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
         }
         log('resolution part title', event, tableName);
         return sequence(plugins
-          .filter(plugin => plugin[event])
           .map(plugin => plugin[event])
-          .filter(pluginOnEvent => pluginOnEvent[tableName])
+          .filter(pluginOnEvent => pluginOnEvent)
           .map(pluginOnEvent => pluginOnEvent[tableName])
+          .filter(eventOnTable => eventOnTable)
           .map(callback => () => callback(data, {parent : parentRequest, query, update, read, isAdmin : local.authId === privateKey}))
         );
       }
@@ -166,8 +166,10 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
               .then(results => {
               //In read only mode, skip the following steps
                 if(local.readOnly) return results;
+                //If request.delete is set, we need to make the access control prior to altering the tables
+                return (request.delete ? controlAccess(results) : Promise.resolve(results))
                 //Delete elements from the database if request.delete is set
-                return remove(results)
+                  .then(remove)
                 //Update table data
                   .then(update)
                 //Add or remove items from the association tables
@@ -176,7 +178,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           })
             .then(results => pluginCall(results, 'onResult').then(() => results))
           //We control the data accesses
-            .then(controlAccess)
+            .then(results => request.delete ? results : controlAccess(results))
           //If nothing matches the request, the result should be an empty array
             .catch(err => {
               if(err.name===NOT_FOUND) return Promise.resolve([]);
@@ -480,11 +482,11 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           ))
           //Reduce the request to only the primitives and objects ids constraints
             .then(() => {
-              return driver.update({
+              return values.length ? driver.update({
                 table : tableName,
                 values,
                 where : { reservedId : results.map(result => result.reservedId) },
-              });
+              }) : Promise.resolve();
             })
         
           //Replace arrays of elements by the provided values
