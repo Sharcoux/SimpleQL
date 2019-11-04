@@ -101,12 +101,12 @@ function classifyRequestData(request, table) {
   return { request, search, primitives, objects, arrays };
 }
 
-function getOptionalDep(dep, requester) {
+function getOptionalDep(dependency, requester) {
   try {
-      const dep = require(dep);
+      const dep = require(dependency);
       return dep;
   } catch(err) {
-      throw new Error(`You should add ${dep} to your dependencies to use ${requester}. Run\nnpm i -D ${dep}`);
+      throw new Error(`You should add ${dependency} to your dependencies to use ${requester}. Run\nnpm i -D ${dep}`);
   }
 }
 

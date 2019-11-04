@@ -48,6 +48,21 @@ createTestServer()
     }))
     .then(logResponse)
   )
+
+  //Forbidden: Registration of a user with the same email
+  .then(() => Promise.resolve()
+    .then(() => log('test error title', '\n', 'Forbidden: Registration of a user with the same email'))
+    .then(() => request({
+      User :
+        {
+          pseudo : 'User1',
+          email : 'user1@email.com',
+          password: userHashedPassword,
+          create : true,
+        },
+    }))
+    .catch(logError)
+  )
   
   // Login as user1
   .then(() => Promise.resolve()

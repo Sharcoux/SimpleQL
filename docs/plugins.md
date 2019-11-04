@@ -8,14 +8,17 @@ Only one plugin is currently available. More are coming!
 
 ### Login
 
-Right now, the only plugin that we are providing is a plugin to handle login to the server through a JWT token or a couple email/password. Of course, this is just a beginning.
+We provide a plugin to handle login to the server through a JWT token or a couple email/password. The passwords are hashed and *(optionnaly)* salted.
 
-The login plugin takes an object parameter containing 4 properties:
+The login plugin takes an object parameter containing 5 properties:
 
  * **userTable** : The name of the table beeing used to store the users
  * **login** : The column being used to store the logins
  * **password** : The column being used to store the passwords
  * **salt** *(optional)* : The column being used to store the salts encrypting the password
+ * **plugins** *(optionnal)* : An object describing optionnal behaviours that you may or may not activate for loggin. This object supports the following plugins:
+    * **google** : the name of the property to look for the google access token.
+    * **facebook** : the name of the property to look for the facebook access token.
 
 **Example**
 
@@ -52,6 +55,48 @@ You will receive a SimpleQL response of this type
   }
 }
 ```
+
+#### Google and Facebook authentication
+
+This is how you can enable Google and Facebook authentication:
+
+```javascript
+  loginPlugin({
+    login: 'email',
+    password: 'password',
+    salt: 'salt',
+    userTable: 'User',
+    plugins: {
+        google: 'googleToken',//This will enable Google authentication when googleToken property is provided in requests
+        facebook: 'facebookToken'//This will enable Facebook authentication when facebookToken property is preovided in requests
+    }
+  }),
+```
+
+This is how you can log in a user with Facebook:
+
+```javascript
+{
+  User : {
+    login : '<facebook userId>',
+    facebookToken : '<facebook access token>',
+  }
+}
+```
+
+This is how you can sign in a user with Google:
+
+```javascript
+{
+  User : {
+    googleToken : '<google access token>',
+    create: true,
+  }
+}
+```
+
+**Note**: Don't forget to register your domain on Facebook and Google to enable this kind of access.
+
 
 ### Security
 

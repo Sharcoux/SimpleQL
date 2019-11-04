@@ -54,7 +54,8 @@ const plugins = [
 
 const app = express();
 app.listen(80);
-createServer({app, tables, database, rules, plugins});
+const root = '/';//This is the path the SimpleQL requests should be addressed to. It will default to '/'.
+createServer({app, tables, database, rules, plugins, root});
 ```
 
 **Note:** You can also add a list of *express* **middlewares** and an **error handler** directly as parameter of the `createServer` function:

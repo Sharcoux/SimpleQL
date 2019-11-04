@@ -52,5 +52,4 @@ module.exports = {
   database,
   login,
   security,
-  googleLogin
 };

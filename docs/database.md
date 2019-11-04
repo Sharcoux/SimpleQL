@@ -16,20 +16,61 @@ You need to provide the database information needed to establish a connexion to 
 };
 ```
 
-## types
+### types
 
 Currently, only **mysql** is available.
 
-## privateKey
+### privateKey
 
 This should be consider as an administrator password. Requests using thins key will be granted all access and access control rules will be ignored (see setting access rights).
 
-## create
+### create
 
 Right now, when you want to create the database the first time, you need to set `create` to `true`. Once your database is created, you will need to remove the `create` option. This will be improved in the future.
 
-## Others
+### Others
 
 You can set various options. For **mysql**, you can find the list [here](https://github.com/mysqljs/mysql#connection-options)
 
+## Make server-side requests to the database
 
+You can use SimpleQL server-side to query the database. To do so, you will need to require the asynchronous function getQuery from simple-ql package:
+
+```javascript
+const { getQuery } = require('simple-ql');
+
+getQuery()
+  //Make the server-side request
+  .then(query => query({
+    User: {
+      email : 'user1@email.com',
+      contacts : {
+        add : {email: 'user2@email.com'},
+      }
+    }
+  }))
+  //Log the results
+  .then(results => console.log(results));
+```
+
+`query` is a function that will take 2 parameters:
+
+* **request**: the SimpleQL request that you wish to execute on the database
+* **userId**: the *reservedId* of the user that you want the request to be executed on the behalf of. By default, the request will be executed with admin rights and full access to the database will be granted, ignoring the [rules](./access.md) defined for this database. If you want the request to be limited to the access rights a specific user would be granted, just use its *reservedId* as second parameter for the request.
+
+*Example:*
+
+```javascript
+getQuery()
+  //Make the server-side request
+  .then(query => query({
+    User: {
+      email : 'user2@email.com',
+      get: '*',
+    }
+  }, 1))
+  //Log the results
+  .then(results => console.log(results));
+```
+
+This request will be executed on the behalf of the user whose *reservedId* is 1. Thus, this request will not retrieve the password of the user as this information is not readable.

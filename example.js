@@ -5,28 +5,30 @@ const express = require('express');
 /*************************************************************************
  *************************** TABLES DECLARATION **************************/
 
+//Generate the tables. Doing it this way make us able to use self-references and cross references between tables
+const [ User, Feed, Comment ] = new Array(3).fill().map(() => ({}));
+const tables = {User, Feed, Comment};
+
 // First, just focus on the structure of your data. Describe your table architecture
-const User = {
+Object.assign(User, {
   pseudo: 'string/25',
   email: 'string/40',
   password: 'binary/64',
   salt: 'binary/16',
+  contacts: [User],
+  invited: [User],
   index: [
     //You can use the object form
     {
       column: 'email',
       type: 'unique',
-      length: 8,
     },
     //Or the short string form
     'pseudo/8'
   ],
-};
-//We need this step to use self-references or cross-references
-User.contacts = [User];
-User.invited = [User];
+});
 
-const Comment = {
+Object.assign(Comment, {
   content: 'text',
   title: {
     type : 'string',
@@ -37,14 +39,12 @@ const Comment = {
   date: 'dateTime',
   lastModification: 'dateTime',
   index : ['date', 'content/fulltext'],
-};
+});
 
-const Feed = {
+Object.assign(Feed, {
   participants: [User],
   comments: [Comment],
-};
-
-const tables = {User, Feed, Comment};
+});
 
 /*************************************************************************
  ************************* DATABASE CONFIGURATION ************************/

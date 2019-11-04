@@ -1,3 +1,6 @@
+
+const { WRONG_VALUE, CONFLICT } = require('../errors');
+
 const mysql = {};
 try {
   Object.assign(mysql, require('mysql'));
@@ -38,7 +41,7 @@ class Driver {
       this.connection.query(query+';', (error, results) => {
         clearTimeout(timeout);
         if (error) reject(error);
-        resolve(results);
+        else resolve(results);
       });
     });
   }
@@ -78,14 +81,14 @@ class Driver {
     let query = this._createQuery(`SELECT ${search.map(s => ei(s)).join(', ')} FROM ${ei(table)}`, where, table);
     if(offset) query += ` OFFSET ${es(parseInt(offset, 10))}`;
     if(limit) query += ` LIMIT ${es(parseInt(limit, 10))}`;
-    return this.query(query).then(results => {
+    return this.query(query).catch(errorHandler(table)).then(results => {
       log('database result', JSON.stringify(results));
       return results instanceof Array ? results : [results];
     });
   }
   delete({table, where}) {
     const query = this._createQuery(`DELETE FROM ${ei(table)}`, where, table);
-    return this.query(query);
+    return this.query(query).catch(errorHandler(table));
   }
   create({table, elements}) {
     if(!elements) return Promise.resolve();
@@ -108,7 +111,7 @@ class Driver {
       ) VALUES (
         ${Object.keys(element).map(k => this._escapeValue(table, k, element[k])).join(', ')}
       )`;
-      return this.query(query).then(results => results instanceof Array ? results.map(result => result.insertId) : results.insertId);
+      return this.query(query).catch(errorHandler(table)).then(results => results instanceof Array ? results.map(result => result.insertId) : results.insertId);
     }));
   }
   _escapeValue(table, key, value) {
@@ -125,14 +128,16 @@ class Driver {
       return `${ei(key)}=${this._escapeValue(table, key, value)}`;
     }).join(', ');
     const query = this._createQuery(`UPDATE ${ei(table)} SET ${setQuery}`, where, table);
-    return this.query(query);
+    return this.query(query).catch(errorHandler(table));
   }
   createTable({table = '', data = {}, index = []}) {
+    console.log(data);
     const columnsKeys = Object.keys(data).filter(key => key!=='index');
     const columns = columnsKeys.map(name => {
       const { type, length, unsigned, notNull, defaultValue, autoIncrement } = data[name];
       //We record binary columns to not escape their values during INSERT or UPDATE
       if(type==='binary' || type==='varbinary') this.binaries.push(`${table}.${name}`);
+      if((type==='string' || type==='varchar' || type==='varbinary') && !length) throw new Error(`You must specify the length of columns of type ${type}, such as ${name} in ${table}.`)
       else if(type==='dateTime') this.dates.push(`${table}.${name}`);
 
       let query = `${name} ${convertType(type)}`;
@@ -162,7 +167,7 @@ class Driver {
       ${columns.join(',\n      ')}
       ${indexes.join('\n      ')}
       , CONSTRAINT PK_${table} PRIMARY KEY (reservedId)
-    )`);
+    )`).catch(errorHandler(table));
   }
   createForeignKeys(foreignKeys = {}) {
     return sequence(Object.keys(foreignKeys).map(tableName => () => {
@@ -171,7 +176,7 @@ class Driver {
       return this.query(`
         ALTER TABLE ${tableName}
         ${query}
-      `);
+      `).catch(errorHandler(tableName));
     }));
   }
 
@@ -232,6 +237,19 @@ function convertType(type) {
   switch(type) {
     case 'string': return 'VARCHAR';
     default : return type.toUpperCase();
+  }
+}
+
+function errorHandler(table) {
+  return error => {
+    console.log(error.sqlMessage.replace(`I_${table}_`, ''));
+    if(error.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' && error.sqlMessage.includes('Access denied'))
+      return Promise.reject({name: WRONG_VALUE, message: 'You are not allowed to access some data needed for your request.'});
+    else if(error.code === 'ER_DUP_ENTRY') return Promise.reject({name: CONFLICT, message: error.sqlMessage.replace(`I_${table}_`, '') });
+    else {
+      console.error(error);
+      return Promise.reject({name: error.code, message: error.sqlMessage});
+    }
   }
 }
 

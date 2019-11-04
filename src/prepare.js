@@ -100,6 +100,14 @@ function prepareTables(tables) {
         ]
       };
     });
+
+    if(table.index) table.index.forEach(elt => {
+      if(!elt.column) throw new Error(`An index entry doesn't precise any column to refer to in table ${tableName}.`);
+      const column = acc[tableName][elt.column];
+      if(!column) throw new Error(`The index entry ${elt.column} doesn't match any column in table ${tableName}.`);
+      if(elt.length && column.length && elt.length>column.length) throw new Error(`The length for index ${elt.column} is larger than the length of the column specified in the table ${tableName}.`)
+    });
+
     return acc;
   }, {});
 }

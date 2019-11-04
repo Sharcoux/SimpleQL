@@ -1,5 +1,7 @@
 # Requesting your database
 
+SimpleQL server will listen to any request made to the server on the root path defined when creating the server (`/` by default). You can use Ajax, axios or request-promise from the client. You can use all methods but `post` is probably the best suited. For server-side requests, see the [database documentation](./database.md).
+
 ## Simple requests
 
 You can now get information from the database by sending this kind of request body:

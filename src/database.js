@@ -1,6 +1,6 @@
 const readline = require('readline');
 const { isPrimitive, classifyRequestData, operators, sequence } = require('./utils');
-const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, DATABASE_ERROR } = require('./errors');
+const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, DATABASE_ERROR, WRONG_VALUE, CONFLICT } = require('./errors');
 const { prepareTables, prepareRules } = require('./prepare');
 const log = require('./utils/logger');
 
@@ -182,9 +182,8 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           //If nothing matches the request, the result should be an empty array
             .catch(err => {
               if(err.name===NOT_FOUND) return Promise.resolve([]);
-              if(err.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' && err.sqlMessage.includes('Access denied')) {
-                return Promise.reject({name: ACCESS_DENIED, message: `You are not allowed to access some data needed for your request in table ${this.tableName}.`});
-              }
+              if(err.name===WRONG_VALUE) return Promise.reject({ name: ACCESS_DENIED, message: `You are not allowed to access some data needed for your request in table ${tableName}.`})
+              if(err.name===CONFLICT) return Promise.reject({ name: CONFLICT, message: `${err.message} in table ${tableName}.`})
               return Promise.reject(err);
             });
         });
@@ -244,6 +243,12 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                 const { primitives : setPrimitives, objects : setObjects, arrays : setArrays } = classifyRequestData(request.set, table);
                 return checkEntry(request.set, setPrimitives, setObjects, setArrays);
               }
+              //Check that there is not add or remove instruction in object fields
+              const unwantedInstruction = objects.find(key => request[key].add || request[key].remove);
+              if(unwantedInstruction) return Promise.reject({
+                name: BAD_REQUEST,
+                message: `Do not use 'add' or 'remove' instructions within ${unwantedInstruction} parameter in table ${tableName}. You should use the 'set' instruction instead.`
+              });
               //Cannot add or remove elements from arrays in create or delete requests
               if(request.create || request.delete) {
                 const addOrRemove = arrays.find(key => request[key].add || request[key].remove);
@@ -276,7 +281,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                 });
                 else if(result.length>1) return Promise.reject({
                   name: NOT_UNIQUE,
-                  message: `We found multiple solutions for setting key ${key} in ${this.tableName}: ${JSON.stringify(request[key])}.`
+                  message: `We found multiple solutions for setting key ${key} in ${tableName}: ${JSON.stringify(request[key])}.`
                 });
                 else request[key] = result[0];
               });
@@ -683,11 +688,9 @@ function ensureCreation(databaseName) {
   return new Promise((resolve, reject) =>
     rl.question(`Are you sure that you wish to completely erase any previous database called ${databaseName} (y/N)\n`, answer => {
       rl.close();
-      answer==='y' ? resolve() : reject('If you don\'t want to erase the database, remove the "create" property from the "database" object.');
+      answer.toLowerCase()==='y' ? resolve() : reject('If you don\'t want to erase the database, remove the "create" property from the "database" object.');
     })
   );
 }
 
-module.exports = {
-  createDatabase,
-};
+module.exports = createDatabase;

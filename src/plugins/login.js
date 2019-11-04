@@ -74,7 +74,7 @@ function createHash(password, salt) {
  * @param {string} password The column that will store the user's password
  * @param {string} salt The column that will store the random generated salt for the password (optional)
  */
-function createLocalLogin(config) {
+function createLoginPlugin(config) {
   check(loginModel, config);
   const { login = 'email', password = 'password', salt, userTable = 'User', firstname, lastname, plugins: { google, facebook } = {} } = config;
 
@@ -257,7 +257,4 @@ function createLocalLogin(config) {
   };
 }
 
-module.exports = {
-  createLocalLogin,
-  privateKey
-};
+module.exports = createLoginPlugin;

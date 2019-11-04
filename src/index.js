@@ -1,23 +1,29 @@
-const { createDatabase } = require('./database');
+const createDatabase = require('./database');
 const errors = require('./errors');
-const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, DATABASE_ERROR, FORBIDDEN, UNAUTHORIZED, WRONG_PASSWORD, ACCESS_DENIED } = errors;
+const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, DATABASE_ERROR, FORBIDDEN, UNAUTHORIZED, WRONG_PASSWORD, ACCESS_DENIED, CONFLICT } = errors;
 const checkParameters = require('./checks');
 const accessControl = require('./accessControl');
 const bodyParser = require('body-parser');
 const log = require('./utils/logger');
 const plugins = require('./plugins');
+let dbReady = () => {}
+const getQuery = new Promise(resolve => dbReady = resolve);
+
 module.exports = {
   ...accessControl,
   createServer,
   errors,
   plugins,
+  getQuery,
 };
 
-function createServer({tables = {}, database = {}, rules = {}, plugins = [], middlewares = [], errorHandler, app}) {
+function createServer({tables = {}, database = {}, rules = {}, plugins = [], middlewares = [], root = '/', errorHandler, app}) {
   const allMiddlewares = plugins.map(plugin => plugin.middleware).filter(mw => mw).concat(middlewares);
   const errorHandlers = plugins.map(plugin => plugin.errorHandler).filter(mw => mw);
   errorHandlers.push(errorHandler || defaultErrorHandler);
-  if(!app || !app.use || !app.all) return Promise.reject('app parameter is required and should be an express app created with express().')
+  if(!app || !app.use || !app.all) return Promise.reject('app parameter is required and should be an express app created with express().');
+  if(!(Object(root) instanceof String)) return Promise.reject('root parameter must be of type string and should denote the path to listen to');
+  if(!root.startsWith('/')) return Promise.reject('root parameter should start with \'/\' and denote the path SimplQL server should listen to');
   //Check data
   return checkParameters({tables, database, rules, plugins})
     //Create the database
@@ -25,19 +31,21 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
     .then(requestHandler => {
       log('info', `${database.database} database ready to be used!`);
       // parse application/x-www-form-urlencoded
-      app.use('/', bodyParser.urlencoded({ extended: false }));
+      app.use(root, bodyParser.urlencoded({ extended: false }));
       // parse application/json
-      app.use('/', bodyParser.json());
+      app.use(root, bodyParser.json());
       //Add the middlewares
       allMiddlewares.forEach(m => app.use(m));
       //Listen to simple QL requests
-      app.all('/', simpleQL(requestHandler));
+      app.all(root, simpleQL(requestHandler));
       //Add error handlers
       errorHandlers.forEach(h => app.use(h));
       //Final error handler, ditching error
-      app.use('/', (err, req, res, next) => next());
+      app.use(root, (err, req, res, next) => next());
       log('info', 'Simple QL server ready!');
-      return requestHandler;
+      const dbQuery = (query, authId = database.privateKey) => requestHandler(authId, query);
+      dbReady(dbQuery);
+      return dbQuery;
     });
 }
 
@@ -70,6 +78,10 @@ function defaultErrorHandler(err, req, res, next) {//eslint-disable-line no-unus
         break;
       case NOT_FOUND:
         res.writeHead(404);
+        res.end(err.message);
+        break;
+      case CONFLICT:
+        res.writeHead(409);
         res.end(err.message);
         break;
       case DATABASE_ERROR:

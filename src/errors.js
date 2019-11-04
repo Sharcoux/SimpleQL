@@ -8,4 +8,6 @@ module.exports = {
   DATABASE_ERROR : 'databaseError',
   FORBIDDEN : 'forbidden',
   ACCESS_DENIED: 'accessDenied',
+  WRONG_VALUE: 'wrongValue',
+  CONFLICT: 'conflict',
 };
