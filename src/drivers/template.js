@@ -19,7 +19,7 @@ class Driver {
   }
   rollback() {
   }
-  get({table, search, where, offset, limit}) {
+  get({table, search, where, offset, limit, order}) {
   }
   delete({table, where}) {
   }

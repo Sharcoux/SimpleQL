@@ -76,11 +76,13 @@ class Driver {
       this.inTransaction = false;
     });
   }
-  get({table, search, where, offset, limit}) {
+  get({table, search, where, offset, limit, order}) {
     if(!search.length) return Promise.resolve({});
     let query = this._createQuery(`SELECT ${search.map(s => ei(s)).join(', ')} FROM ${ei(table)}`, where, table);
-    if(offset) query += ` OFFSET ${es(parseInt(offset, 10))}`;
+    //order: ['name', '-age'] will sort by ascending name and descending age
+    if(order) query += ` ORDER BY ${order.map(column => (column.startsWith('-') ? `${ei(column.substring(1))} DESC` : `${ei(column)} ASC`)).join(', ')}`;
     if(limit) query += ` LIMIT ${es(parseInt(limit, 10))}`;
+    if(offset) query += ` OFFSET ${es(parseInt(offset, 10))}`;
     return this.query(query).catch(errorHandler(table)).then(results => {
       log('database result', JSON.stringify(results));
       return results instanceof Array ? results : [results];
@@ -131,7 +133,6 @@ class Driver {
     return this.query(query).catch(errorHandler(table));
   }
   createTable({table = '', data = {}, index = []}) {
-    console.log(data);
     const columnsKeys = Object.keys(data).filter(key => key!=='index');
     const columns = columnsKeys.map(name => {
       const { type, length, unsigned, notNull, defaultValue, autoIncrement } = data[name];
@@ -242,7 +243,6 @@ function convertType(type) {
 
 function errorHandler(table) {
   return error => {
-    console.log(error.sqlMessage.replace(`I_${table}_`, ''));
     if(error.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' && error.sqlMessage.includes('Access denied'))
       return Promise.reject({name: WRONG_VALUE, message: 'You are not allowed to access some data needed for your request.'});
     else if(error.code === 'ER_DUP_ENTRY') return Promise.reject({name: CONFLICT, message: error.sqlMessage.replace(`I_${table}_`, '') });

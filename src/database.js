@@ -228,38 +228,38 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           return checkEntry(request, primitives, objects, arrays)
             .then(() => {
             //Only one instructions among create, delete, get in each request
-              if(request.create && request.delete) {
-                return Promise.reject({
-                  name : BAD_REQUEST,
-                  message : `Each request can contain only one among 'create' or 'delete'. The request was : ${JSON.stringify(request)}.`,
-                });
-              }
+              if(request.create && request.delete) return Promise.reject(`Each request can contain only one among 'create' or 'delete'. The request was : ${JSON.stringify(request)}.`);
               //Check that set instruction is acceptable
               if(request.set) {
-                if(request.set instanceof Array || !(request instanceof Object)) return Promise.reject({
-                  name : BAD_REQUEST,
-                  message : `The 'set' instruction ${JSON.stringify(request.set)} provided in table ${tableName} is not a plain object. A plain object is required for 'set' instructions.`,
-                });
+                if(Array.isArray(request.set) || !(request instanceof Object)) return Promise.reject(`The 'set' instruction ${JSON.stringify(request.set)} provided in table ${tableName} is not a plain object. A plain object is required for 'set' instructions.`);
                 const { primitives : setPrimitives, objects : setObjects, arrays : setArrays } = classifyRequestData(request.set, table);
                 return checkEntry(request.set, setPrimitives, setObjects, setArrays);
               }
               //Check that there is not add or remove instruction in object fields
               const unwantedInstruction = objects.find(key => request[key].add || request[key].remove);
-              if(unwantedInstruction) return Promise.reject({
-                name: BAD_REQUEST,
-                message: `Do not use 'add' or 'remove' instructions within ${unwantedInstruction} parameter in table ${tableName}. You should use the 'set' instruction instead.`
-              });
+              if(unwantedInstruction) return Promise.reject(`Do not use 'add' or 'remove' instructions within ${unwantedInstruction} parameter in table ${tableName}. You should use the 'set' instruction instead.`);
               //Cannot add or remove elements from arrays in create or delete requests
               if(request.create || request.delete) {
                 const addOrRemove = arrays.find(key => request[key].add || request[key].remove);
-                const message = request.create ? `In create requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. To add children, just write the constraints directly under ${addOrRemove}.`
-                  : `In delete requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. When deleting an object, the associations with this object will be automatically removed.`;
-                if(addOrRemove) return Promise.reject({
-                  name : BAD_REQUEST,
-                  message,
-                });
+                if(addOrRemove) return Promise.reject(
+                  request.create ? `In create requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. To add children, just write the constraints directly under ${addOrRemove}.`
+                  : `In delete requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. When deleting an object, the associations with this object will be automatically removed.`
+                );
               }
-            });
+              //Check limit, offset and order instructions
+              if(request.limit && !Number.isInteger(request.limit)) return Promise.reject(`'Limit' statements requires an integer within ${tableName}. We received: ${request.limit} instead.`);
+              if(request.offset && !Number.isInteger(request.offset)) return Promise.reject(`'Offset' statements requires an integer within ${tableName}. We received: ${request.offset} instead.`);
+              if(request.order) {
+                //Ensure that order is an array of strings
+                if(!Array.isArray(request.order)) return Promise.reject(`'order' statements requires an array of column names within ${tableName} request. We received: ${request.order} instead.`);
+                //Ensure that it denotes only existing columns
+                const columns = Object.keys(tablesModel[tableName]);
+                const unfoundColumn = request.order.find(column =>
+                  column.startsWith('-') ? !columns.includes(column.substring(1)) : !columns.includes(column)
+                );
+                if(unfoundColumn) return Promise.reject(`'order' statement requires an array of property names within ${tableName}, but ${unfoundColumn} doesn't belong to this table.`);
+              }
+            }).catch(err => Promise.reject({ name: BAD_REQUEST, message: err }));
         }
 
         /** We look for objects that match the request constraints and store their id into the key+Id property and add the objects into this.resolvedObjects map */
@@ -367,6 +367,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             where,
             limit : request.limit,
             offset : request.offset,
+            order: request.order,
           })
           //We add the date to the cache as they were received from the database
             .then(results => {
@@ -414,7 +415,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             //We look for all objects associated to the result in the association table
               () => driver.get({table : `${key}${tableName}`, search : [key+'Id'], where : {
                 [tableName+'Id'] : result.reservedId,
-              }, offset : request[key].offset, limit : request[key].limit})
+              }, offset : request[key].offset, limit : request[key].limit, order : request[key].order})
                 .then(associatedResults => {
                   if(!associatedResults.length) return [];
                   //We look for objects that match all the constraints

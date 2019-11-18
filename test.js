@@ -248,6 +248,23 @@ createTestServer()
     .then(logResponse)
   )
 
+  //Retrieving messages using limit, offset and order
+  .then(() => Promise.resolve()
+    .then(() => log('test title', '\n', 'Retrieving messages using limit, offset and order'))
+    .then(() => request({
+      Comment : {
+        author: {
+          email : 'user2@email.com',
+        },
+        limit: 1,
+        offset: 0,
+        order: ['-date', 'title'],
+        get : '*',
+      }
+    }))
+    .then(logResponse)
+  )
+
   //Forbidden : editing another user data
   .then(() => Promise.resolve()
     .then(() => log('test error title', '\n', 'Forbidden : Edit another user'))

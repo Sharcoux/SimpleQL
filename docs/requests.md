@@ -151,7 +151,7 @@ You can mix them, and `not` can be combined with any of them:
 }
 ```
 
-You can also use `limit` and `offset` to control the results.
+You can also use `order`, `limit` and `offset` to control the results.
 
 ```javascript
 {
@@ -160,11 +160,16 @@ You can also use `limit` and `offset` to control the results.
     contacts : {
       limit: 10,
       offset: 10,
+      order: ['name', '-age'],
       get: ['name'],
     }
   }
 }
 ```
+
+* **limit**: Limit the number of results to the amount specified as an integer
+* **offset**: Excludes the first results of the research, specified as an integer
+* **order**: The list of column to be sorted by priority order. To sort by reversed order, preceed the column name with minus sign `-`
 
 ## Updating the database
 
