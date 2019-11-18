@@ -64,14 +64,14 @@ function checkTables(tables) {
     }
 
     if(field==='index') {
-      if(!(value instanceof Array) && !(Object(value) instanceof String)) return Promise.reject(`Field 'index' in ${tableName} must be an array containing objects where keys are 'column', 'type' and 'length', or a string separing these values with a '/'.`);
+      if(!Array.isArray(value) && !(Object(value) instanceof String)) return Promise.reject(`Field 'index' in ${tableName} must be an array containing objects where keys are 'column', 'type' and 'length', or a string separing these values with a '/'.`);
       return Promise.resolve();
     }
     if(Object.keys(tables).includes(field)) return Promise.reject(`Field ${field} in ${tableName} cannot have the same name as a table.`);
     if(Object(value) instanceof String) {
       const [type, length] = value.split('/');
       return checkConsistency({type, length});
-    } else if(value instanceof Array) {
+    } else if(Array.isArray(value)) {
       if(value.length!==1) return Promise.reject(`${field} in ${tableName} is an array and should contain only one element which whould be pointing to another table`);
       //We now check that the table object is correctly defined and reference another table
       return checkField(tableName, `${field}[]`, value[0]);
@@ -142,7 +142,7 @@ function checkRules(rules, tables) {
 /** Check that all provided plugins are well formed. */
 function checkPlugins(plugins, tables) {
   const pluginKeys = ['middleware', 'onRequest', 'onCreation', 'onDeletion', 'onResult', 'preRequisite', 'errorHandler'];
-  if(!(plugins instanceof Array)) return Promise.reject(`plugins should be an array. But we received ${JSON.stringify(plugins)}.`);
+  if(!Array.isArray(plugins)) return Promise.reject(`plugins should be an array. But we received ${JSON.stringify(plugins)}.`);
   return Promise.all(plugins.map(plugin => {
     return Promise.all(Object.keys(plugin).map(key => {
       if(!pluginKeys.includes(key)) return Promise.reject(`Plugins can only contain these functions: ${pluginKeys}, but we found ${key}.`);

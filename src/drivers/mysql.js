@@ -85,7 +85,7 @@ class Driver {
     if(offset) query += ` OFFSET ${es(parseInt(offset, 10))}`;
     return this.query(query).catch(errorHandler(table)).then(results => {
       log('database result', JSON.stringify(results));
-      return results instanceof Array ? results : [results];
+      return Array.isArray(results) ? results : [results];
     });
   }
   delete({table, where}) {
@@ -94,12 +94,12 @@ class Driver {
   }
   create({table, elements}) {
     if(!elements) return Promise.resolve();
-    let list = elements instanceof Array ? elements : [elements];
+    let list = Array.isArray(elements) ? elements : [elements];
     //For each property provided as an array, we duplicate the elements to be created. {a : [1, 2]} becomes [{a: 1}, {a : 2}].
     [...list].forEach(elt => {
       Object.keys(elt).forEach(key => {
         const val = elt[key];
-        if(val instanceof Array) {
+        if(Array.isArray(val)) {
           const L = [];
           val.forEach(v => list.forEach(e => L.push({...e, [key] : v})));
           list = L;
@@ -113,7 +113,7 @@ class Driver {
       ) VALUES (
         ${Object.keys(element).map(k => this._escapeValue(table, k, element[k])).join(', ')}
       )`;
-      return this.query(query).catch(errorHandler(table)).then(results => results instanceof Array ? results.map(result => result.insertId) : results.insertId);
+      return this.query(query).catch(errorHandler(table)).then(results => Array.isArray(results) ? results.map(result => result.insertId) : results.insertId);
     }));
   }
   _escapeValue(table, key, value) {
@@ -153,8 +153,8 @@ class Driver {
     const indexes = index.map(elt => {
       const type = elt.type ? elt.type.toUpperCase()+' ' : '';
       if(!elt.column) throw new Error(`No column was defined for index ${elt} in table ${table}.`);
-      if(elt.column instanceof Array) {
-        if(elt.length && (!(elt.length instanceof Array) || elt.length.length!==elt.column.length)) throw new Error(`length in index definition of table ${table} must be an array matching the column array.`);
+      if(Array.isArray(elt.column)) {
+        if(elt.length && (!Array.isArray(elt.length) || elt.length.length!==elt.column.length)) throw new Error(`length in index definition of table ${table} must be an array matching the column array.`);
         const indexName = `I_${table}${elt.column.map(column => '_'+column).join('')}`;
         const columns = elt.column.map((column, i) => column + (elt.length ? `(${elt.length[i]})` : '')).join(', ');
         return `, ${type}INDEX ${indexName} (${columns})`;
@@ -212,7 +212,7 @@ class Driver {
       const writeCondition = (value, operator = '=') => {
         if(isPrimitive(value)) return writeValue(value, operator);
         if(['not', '!'].includes(operator)) return 'NOT ('+writeCondition(value)+')';
-        if(value instanceof Array) return '('+value.map(v => writeCondition(v, operator)).join(' OR ')+')';
+        if(Array.isArray(value)) return '('+value.map(v => writeCondition(v, operator)).join(' OR ')+')';
         else if(value instanceof Object) return '('+Object.keys(value).map(k => {
           if(!operators.includes(k)) throw new Error(`${k} is not a valid constraint for key ${key}`);
           if(!['not', '!', '='].includes(operator)) throw new Error(`${k} connot be combined with operator ${operator} in key ${key}`);

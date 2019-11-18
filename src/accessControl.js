@@ -73,7 +73,7 @@ function member(field) {
   if(!field || !(Object(field) instanceof String)) return Promise.reject('`member` rule expects its parameter to be a string matching a field or a table. Please refer to the documentation.');
   return ({tables, tableName}) => ({authId, object, request, requestFlag, query}) => {
     const isValid = array => {
-      if(!(array instanceof Array)) return false;
+      if(!Array.isArray(array)) return false;
       return array.map(elt => elt.reservedId).includes(authId);
     };
     return checkInTable({field, tables, tableName, authId, object, request, requestFlag, query, ruleName : 'member', isValid});
@@ -86,7 +86,7 @@ function count(field, { amount, min, max} = {}) {
   if((amount===undefined && min===undefined && max===undefined) || [amount, min, max].find(e => e!==undefined && isNaN(e))) return Promise.reject('`count` rule expects its second parameter to be an object indicating the amount of elements allowed for this field.');
   if(amount!==undefined && (min!==undefined || max !==undefined)) return Promise.reject('You cannot provide both \'amount\' and \'min/max\' in the \'count\' rule');
   const isValid = elt => {
-    let value = elt instanceof Array ? elt.length : Number.parseInt(elt, 10);
+    let value = Array.isArray(elt) ? elt.length : Number.parseInt(elt, 10);
     if(amount) return value===amount;
     else if(min) {
       if(max) return value>=min && value<=max;
@@ -102,7 +102,7 @@ function checkInTable({field, tables, tableName, authId, object, request, reques
   if(requestFlag) {
     const obj = getObjectInRequest(request, field);
     if(!obj) return Promise.reject(`${ruleName}(${field}) rule: The field ${field} is required in requests ${JSON.stringify(request)} in table ${tableName}.`);
-    if(!(obj instanceof Array)) return isValid([obj]) ? Promise.resolve() : Promise.reject(`${ruleName}(${field}) rule: The field ${field}.reservedId must be ${authId} in request ${JSON.stringify(request)} in table ${tableName}.`);
+    if(!Array.isArray(obj)) return isValid([obj]) ? Promise.resolve() : Promise.reject(`${ruleName}(${field}) rule: The field ${field}.reservedId must be ${authId} in request ${JSON.stringify(request)} in table ${tableName}.`);
     return isValid(obj) ? Promise.resolve() : Promise.reject(`${ruleName}(${field}) rule: ${authId} could not be found in ${field} of ${JSON.stringify(request)} in ${tableName}.`);
     //We are looking inside the object result
   } else if(tables[tableName][field]) {
@@ -118,7 +118,7 @@ function checkInTable({field, tables, tableName, authId, object, request, reques
   } else {
     const target = getTargetObject(object, field);
     if(target) {
-      if(!(target instanceof Array)) {
+      if(!Array.isArray(target)) {
         return Promise.reject({
           name: DATABASE_ERROR,
           message: `You cannot use ${ruleName} rule on ${field} in ${tableName} as it is not an array.`,
@@ -143,7 +143,7 @@ function checkInTable({field, tables, tableName, authId, object, request, reques
       });
     }
     const targetField = property || 'reservedId';
-    if(table[targetField] instanceof Array) return Promise.reject({
+    if(Array.isArray(table[targetField])) return Promise.reject({
       name : DATABASE_ERROR,
       message : `The field ${targetField} is an array in the table ${tName}. It should be an object to deal correctly with the ${ruleName} rule ${field}.`
     });

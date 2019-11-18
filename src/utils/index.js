@@ -17,7 +17,7 @@ function any(funcs) {
 
 function stringify(data) {
   if(data instanceof Function) return data + '';
-  else if(data instanceof Array) return '['+data.map(stringify).join(', ')+']';
+  else if(Array.isArray(data)) return '['+data.map(stringify).join(', ')+']';
   else if(data instanceof Object) return JSON.stringify(Object.keys(data).reduce((acc,key) => {acc[key]=stringify(data[key]);return acc;},{}), undefined, 4);
   else return data+'';
 }
@@ -53,7 +53,7 @@ function classifyData(object) {
   const {primitives, objects, arrays} = constraints.reduce(
     (acc,key) => {
       const value = object[key];
-      const belongs = isPrimitive(value) ? 'primitives' : value instanceof Array ? 'arrays'
+      const belongs = isPrimitive(value) ? 'primitives' : Array.isArray(value) ? 'arrays'
         : value.type ? 'primitives' : 'objects';
       acc[belongs].push(key);
       return acc;
@@ -79,7 +79,7 @@ function classifyRequestData(request, table) {
   //We allow using '*' to mean all columns
   if(request.get==='*') request.get = [...tableData.primitives];
   //get must be an array by now
-  if(request.get && !(request.get instanceof Array)) throw {
+  if(request.get && !Array.isArray(request.get)) throw {
     name : BAD_REQUEST,
     message : `get property must be an array of string in table ${table.tableName} in request ${JSON.stringify(request)}.`,
   };

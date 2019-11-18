@@ -81,7 +81,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
         message: `The request was ${request} in table ${tableName}`,
       });
       //If an array is provided, we concatenate the results of the requests
-      if(request instanceof Array) {
+      if(Array.isArray(request)) {
         return sequence(request.map(part => () => resolveInTable({tableName, request : part, parentRequest, local})))
           //[].concat(...array) will flatten array.
           .then(results => [].concat(...results));
@@ -202,7 +202,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
               if(value===null) return Promise.resolve();
               if(isPrimitive(value)) return Promise.resolve();
               //This is the way to represent OR condition
-              if(value instanceof Array) return Promise.all(value.map(v => isValue(v, key)));
+              if(Array.isArray(value)) return Promise.all(value.map(v => isValue(v, key)));
               //This is the way to create a AND condition
               if(value instanceof Object) return Promise.all(Object.keys(value).map(k => operators.includes(k) && isValue(value[k], key)));
               return Promise.reject({
@@ -308,7 +308,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             const element = {};
             //FIXME : we should be able to create more than one object if necessary
             //Make sure we cannot create more than one object at a time
-            const array = primitives.find(key => request[key] instanceof Array);
+            const array = primitives.find(key => Array.isArray(request[key]));
             if(array) return Promise.reject({
               name : BAD_REQUEST,
               message : `It is not allowed to provide an array for key ${array} in table ${tableName} during creation.`,
