@@ -11,7 +11,7 @@ You need to provide the database information needed to establish a connexion to 
       type: 'mysql',            // the database type that you wish to be using
       privateKey: 'key',        // a private key that will be used to identify requests that can ignore access rules
       host : 'localhost',       // the database server host
-      database: 'simpleql',     // the name of your database
+      database: 'myDatabase',   // the name of your database
       create : true,            // we require to overwrite any pre-existing database with the same name
 };
 ```
@@ -39,7 +39,7 @@ You can use SimpleQL server-side to query the database. To do so, you will need 
 ```javascript
 const { getQuery } = require('simple-ql');
 
-getQuery()
+getQuery('myDatabase')
   //Make the server-side request
   .then(query => query({
     User: {
@@ -61,7 +61,7 @@ getQuery()
 *Example:*
 
 ```javascript
-getQuery()
+getQuery('myDatabase')
   //Make the server-side request
   .then(query => query({
     User: {

@@ -24,6 +24,9 @@ class Driver {
     this.pool = pool;
     this.connection = pool;
     this.inTransaction = false;
+    this.startTransaction = this.startTransaction.bind(this);
+    this.commit = this.commit.bind(this);
+    this.rollback = this.rollback.bind(this);
     this.query = this.query.bind(this);
     this.get = this.get.bind(this);
     this.update = this.update.bind(this);
@@ -51,11 +54,11 @@ class Driver {
   startTransaction() {
     //We need to ensure that we are using the same connection during the whole transaction
     if(this.inTransaction) return Promise.reject('You already started a transaction. Call `commit()` or `rollback()` to terminate it.');
+    this.inTransaction = true;
     return new Promise((resolve, reject) => {
       this.pool.getConnection((err, connection) => {
         if(err) reject(err);
         this.connection = connection;
-        this.inTransaction = true;
         return this.query('START TRANSACTION').then(resolve).catch(reject);
       });
     });

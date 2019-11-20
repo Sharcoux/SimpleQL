@@ -5,6 +5,7 @@ const axios = require('axios');
 const log = require('./src/utils/logger');//This is just to color the logs
 const util = require('util');
 const createTestServer = require('./example.js');
+const { getQuery } = require('./src');
 
 //We will use this as the password for our fake users.
 const userHashedPassword = crypto.pbkdf2Sync('password', '', 1, 64, 'sha512').toString('base64');
@@ -307,7 +308,7 @@ createTestServer()
 
   //Deleting our own message
   .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Deleting our own data'))
+    .then(() => log('test title', '\n', 'Deleting our own message'))
     .then(() => request({
       Comment: {
         author: {
@@ -332,6 +333,22 @@ createTestServer()
     .then(logResponse)
   )
 
+  //Server-side request test
+  .then(() => {
+    return Promise.all([getQuery('simpleql').then(query => query({User: {
+      pseudo : 'Admin',
+      email : 'admin@email.com',
+      password: userHashedPassword,
+      create : true,
+    }})),
+    getQuery('simpleql').then(query => query({User: {
+      pseudo : 'Admin2',
+      email : 'admin2@email.com',
+      password: userHashedPassword,
+      create : true,
+    }}))]);
+  })
+
   .catch(err => {
     if(err.response) {
       console.error(err.message, '\n', err.response.data);
@@ -339,19 +356,3 @@ createTestServer()
       console.error(err);
     }
   }).then(process.exit);
-
-// const a = {
-//   User : {
-//     contacts : {
-//       email : '',
-//       contacts : {
-//         remove : {
-//           email : '',
-//         }
-//       },
-//       remove : {
-//         email : '',
-//       }
-//     }
-//   }
-// };

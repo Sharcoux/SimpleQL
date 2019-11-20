@@ -6,8 +6,10 @@ const accessControl = require('./accessControl');
 const bodyParser = require('body-parser');
 const log = require('./utils/logger');
 const plugins = require('./plugins');
-let dbReady = () => {}
-const getQuery = new Promise(resolve => dbReady = resolve);
+
+const dbQuery = {};
+const dbQueryStack = {};
+const getQuery = db => dbQuery[db] || Promise.reject(`No database were created with name ${db}.`);
 
 module.exports = {
   ...accessControl,
@@ -24,12 +26,20 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
   if(!app || !app.use || !app.all) return Promise.reject('app parameter is required and should be an express app created with express().');
   if(!(Object(root) instanceof String)) return Promise.reject('root parameter must be of type string and should denote the path to listen to');
   if(!root.startsWith('/')) return Promise.reject('root parameter should start with \'/\' and denote the path SimplQL server should listen to');
+  //Create the promise to get the query function to make requests to the database from the server
+  const databaseName = database.database;
+  let dbReady = () => {};//Callback when the db is ready
+  let dbReject = () => {};//Callback if the db failed
+  if(database && databaseName && Object(databaseName) instanceof String) {
+    dbQuery[databaseName] = new Promise((resolve, reject) => {dbReady = resolve;dbReject = reject;});
+    dbQueryStack[databaseName] = dbQuery[databaseName];//This promise is resolved each time the db is available for requests
+  }
   //Check data
   return checkParameters({tables, database, rules, plugins})
     //Create the database
     .then(() => createDatabase({tables, database, rules, plugins}))
     .then(requestHandler => {
-      log('info', `${database.database} database ready to be used!`);
+      log('info', `${databaseName} database ready to be used!`);
       // parse application/x-www-form-urlencoded
       app.use(root, bodyParser.urlencoded({ extended: false }));
       // parse application/json
@@ -43,9 +53,15 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
       //Final error handler, ditching error
       app.use(root, (err, req, res, next) => next());
       log('info', 'Simple QL server ready!');
-      const dbQuery = (query, authId = database.privateKey) => requestHandler(authId, query);
+      //Enable server side requests by providint a query function.
+      //We make sure that the previous request is over before it is possible to make a new one.
+      const dbQuery = (query, authId = database.privateKey) => dbQueryStack[databaseName] = dbQueryStack[databaseName].catch(() => {}).then(() => requestHandler(authId, query));
       dbReady(dbQuery);
       return dbQuery;
+    })
+    .catch(err => {
+      dbReject(err);
+      return Promise.reject(err);
     });
 }
 
