@@ -4,7 +4,7 @@
   "description": "A node framework to manage your backend and your database with the least possible amount of code.",
   "main": "src/index.js",
   "scripts": {
-    "test": "node --trace-warnings ./test.js",
+    "test": "node -r dotenv/config --trace-warnings ./test.js",
     "release": "release-it"
   },
   "engines": {
@@ -40,6 +40,7 @@
   },
   "devDependencies": {
     "axios": "^0.18.1",
+    "dotenv": "^8.2.0",
     "eslint": "^5.16.0",
     "express": "^4.16.4",
     "release-it": "^12.4.3"

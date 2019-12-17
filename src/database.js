@@ -32,6 +32,7 @@ function createDatabase({tables, database, rules = {}, plugins = []}) {
 }
 
 function createRequestHandler({tables, rules, tablesModel, plugins, driver, privateKey}) {
+  let inTransaction = false;
   return request;
 
   /**
@@ -43,17 +44,40 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
    */
   function request(authId, request) {
     if(!request) return Promise.reject(`The request is ${request}. You probably forgot to indicate the first parameter: authId. This parameter determines the access rights. It should be set to database.privateKey for admin rights, undefined for public rights, or to a user Id to simulate this user's credentials.`);
+    if(inTransaction) return Promise.reject('A transaction is already in progress. You should not be calling this method right now. Check the documentation about plugins tu see how you can request your database within a plugin method.');
+    //We cache the requests made into the database
     const cache = {};
+    //These data may be updated during the request
+    const local = { authId };
     //We start a transaction to resolve the request
     return driver.startTransaction()
+      .then(() => inTransaction = true)
       //We resolve the request in each table separately
-      .then(() => resolve(request, { authId }))
-      //We terminate the request and commit all the changes made to the database
-      .then(results => driver.commit().then(() => results))
+      .then(() => resolve(request, local))
+      .then(results =>
+        //We let the plugins know that the request will be committed and terminate successfully
+        sequence(plugins.filter(plugin => plugin.onSuccess).map(plugin => plugin.onSuccess(results, { request, query, local, isAdmin: local.authId === privateKey })))
+        //We terminate the request and commit all the changes made to the database
+          .then(() => driver.commit().then(() => inTransaction = false).then(() => results))
+      )
       //We rollback all the changes made to the database if anything wrong happened
-      .catch(err => driver.rollback().then(() => Promise.reject(err)));
+      .catch(err => 
+        //We terminate the request and rollback all the changes made to the database
+        driver.rollback().then(() => inTransaction = false)
+        //We let the plugins know that the request failed and the changes will be discarded
+          .then(() => sequence(plugins.filter(plugin => plugin.onError).map(plugin => plugin.onError(err, { request, query, local, isAdmin: local.authId === privateKey }))))
+        //If the plugins didn't generate a new error, we throw the original error event.
+          .then(() => Promise.reject(err))
+      );
   
-
+    /** 
+     * Function needed to query the database from rules or plugins.
+     * Function provided to execute SimpleQL requests into the database, potentially with admin rights
+     **/
+    function query(request, { readOnly, admin } = { readOnly : false, admin : false }) {
+      return resolve(request, { authId : admin ? privateKey : local.authId, readOnly });
+    }
+    
     /**
      * Resolve a full simple-QL request
      * @param {Object} local An object containing all parameters persisting during the whole request resolving process
@@ -87,29 +111,15 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           .then(results => [].concat(...results));
       }
 
-      //Function needed to query the database from rules or plugins
-      //Function provided to execute SimpleQL requests into the database, potentially with admin rights
-      function query(request, { readOnly, admin } = { readOnly : false, admin : false }) {
-        return resolve(request, { authId : admin ? privateKey : local.authId, readOnly });
-      }
-      
       function pluginCall(data, event) {
         //Function provided to edit local request parameters (authId, readOnly) during the request
-        function update(key, value) {
-          local[key] = value;
-        }
-  
-        //Function provided to read local parameters values during the request
-        function read(key) {
-          return local[key];
-        }
         log('resolution part title', event, tableName);
         return sequence(plugins
-          .map(plugin => plugin[event])
-          .filter(pluginOnEvent => pluginOnEvent)
-          .map(pluginOnEvent => pluginOnEvent[tableName])
+          //Read the callback for the event in this table for each plugin
+          .map(plugin => plugin[event] && plugin[event][tableName])
+          //Keep only the plugins that have such a callback
           .filter(eventOnTable => eventOnTable)
-          .map(callback => () => callback(data, {parent : parentRequest, query, update, read, isAdmin : local.authId === privateKey}))
+          .map(callback => () => callback(data, {parent : parentRequest, query, local, isAdmin : local.authId === privateKey}))
         );
       }
 
@@ -177,13 +187,13 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
               });
           })
             .then(results => pluginCall(results, 'onResult').then(() => results))
-          //We control the data accesses
+            //We control the data accesses
             .then(results => request.delete ? results : controlAccess(results))
-          //If nothing matches the request, the result should be an empty array
             .catch(err => {
+              //If nothing matches the request, the result should be an empty array
               if(err.name===NOT_FOUND) return Promise.resolve([]);
-              if(err.name===WRONG_VALUE) return Promise.reject({ name: ACCESS_DENIED, message: `You are not allowed to access some data needed for your request in table ${tableName}.`})
-              if(err.name===CONFLICT) return Promise.reject({ name: CONFLICT, message: `${err.message} in table ${tableName}.`})
+              if(err.name===WRONG_VALUE) return Promise.reject({ name: ACCESS_DENIED, message: `You are not allowed to access some data needed for your request in table ${tableName}.`});
+              if(err.name===CONFLICT) return Promise.reject({ name: CONFLICT, message: `${err.message} in table ${tableName}.`});
               return Promise.reject(err);
             });
         });
@@ -243,7 +253,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                 const addOrRemove = arrays.find(key => request[key].add || request[key].remove);
                 if(addOrRemove) return Promise.reject(
                   request.create ? `In create requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. To add children, just write the constraints directly under ${addOrRemove}.`
-                  : `In delete requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. When deleting an object, the associations with this object will be automatically removed.`
+                    : `In delete requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. When deleting an object, the associations with this object will be automatically removed.`
                 );
               }
               //Check limit, offset and order instructions

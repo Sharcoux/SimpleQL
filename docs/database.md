@@ -34,6 +34,8 @@ You can set various options. For **mysql**, you can find the list [here](https:/
 
 ## Make server-side requests to the database
 
+**Warning**: You should NOT use this method inside plugins. Using this methods, your changes to the database will automatically be commited. 
+
 You can use SimpleQL server-side to query the database. To do so, you will need to require the asynchronous function getQuery from simple-ql package:
 
 ```javascript

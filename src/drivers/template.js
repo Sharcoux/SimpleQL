@@ -1,7 +1,5 @@
-
 class Driver {
-  constructor(connection) {
-    this.connection = connection;
+  constructor() {
     this.query = this.query.bind(this);
     this.get = this.get.bind(this);
     this.update = this.update.bind(this);

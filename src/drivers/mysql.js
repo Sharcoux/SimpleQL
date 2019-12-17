@@ -141,7 +141,7 @@ class Driver {
       const { type, length, unsigned, notNull, defaultValue, autoIncrement } = data[name];
       //We record binary columns to not escape their values during INSERT or UPDATE
       if(type==='binary' || type==='varbinary') this.binaries.push(`${table}.${name}`);
-      if((type==='string' || type==='varchar' || type==='varbinary') && !length) throw new Error(`You must specify the length of columns of type ${type}, such as ${name} in ${table}.`)
+      if((type==='string' || type==='varchar' || type==='varbinary') && !length) throw new Error(`You must specify the length of columns of type ${type}, such as ${name} in ${table}.`);
       else if(type==='dateTime') this.dates.push(`${table}.${name}`);
 
       let query = `${name} ${convertType(type)}`;
@@ -253,7 +253,7 @@ function errorHandler(table) {
       console.error(error);
       return Promise.reject({name: error.code, message: error.sqlMessage});
     }
-  }
+  };
 }
 
 module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host = 'localhost', connectionLimit = 100, ...parameters}) => {
@@ -265,7 +265,16 @@ module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host
     //Destroy previous database if required
     return driver.query(`DROP DATABASE IF EXISTS ${database}`)
       .catch(err => {
-        if(err.code === 'ECONNREFUSED') return Promise.reject(`Failed to connect to the database. Make sure that you have a MySQL database running on port ${err.port} of host ${err.address}.`);
+        if(err.code === 'ECONNREFUSED') return Promise.reject(`Failed to connect to the database. Make sure that you have a MySQL database running on port ${err.port} of host ${err.address}. If you don't have a mysql database, you can install one with the following commands:
+          sudo apt install mysql-server
+          sudo mysql_secure_installation
+          sudo systemctl start mysql
+        `);
+        else if(err.code === 'ER_NOT_SUPPORTED_AUTH_MODE') return Promise.reject(`ER_NOT_SUPPORTED_AUTH_MODE: Client does not support authentication protocol requested by server. You should try the following options:
+          * downgrade your mysql server to 5.6.40,
+          * use a non root user,
+          * or run:
+              ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'password'`);
         else return Promise.reject(err);
       })
       //Create the database

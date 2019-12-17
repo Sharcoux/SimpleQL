@@ -1,5 +1,5 @@
 // const { createServer, is, or, member, count, none, all, not, and, plugins : { loginPlugin } } = require('simple-ql');
-const { createServer, is, or, member, count, none, all, not, and, plugins : { loginPlugin } } = require('./src');
+const { createServer, is, or, member, count, none, all, not, and, plugins : { loginPlugin, securityPlugin } } = require('./src');
 const express = require('express');
 
 /*************************************************************************
@@ -58,6 +58,7 @@ const database = {
   host : 'localhost',       // the database server host
   database: 'simpleql',     // the name of your database
   create : true,            // we require to create the database
+  insecureAuth : true
 };
 
 /*************************************************************************
@@ -220,7 +221,16 @@ const customPlugin = {
 };
 
 const app = express();
-app.listen(80);
+app.listen(80).on('error', error => {
+  console.error(error);
+  if(error.code==='EACCES') console.log(`It seems that you don't have right to run node on port 80. You should try the following approaches:
+    * Run the process as root, then drop the privileges
+    * Run the following command to enable node to run on port 80:
+        sudo apt-get install libcap2-bin
+        sudo setcap cap_net_bind_service=+ep \`readlink -f \\\`which node\\\`\`
+  `);
+  process.exit();
+});
 
 const plugins = [];
 
@@ -233,10 +243,10 @@ if(process.env.NODE_ENV==='production') plugins.push(securityPlugin({
 
 //Add a plugin that enables basic login/password authentication
 plugins.push(loginPlugin({
-    login: 'email',
-    password: 'password',
-    salt: 'salt',
-    userTable: 'User',
+  login: 'email',
+  password: 'password',
+  salt: 'salt',
+  userTable: 'User',
 }));
 
 //Add our custom plugin to handle specific behaviours for some requests

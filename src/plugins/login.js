@@ -79,7 +79,7 @@ function createLoginPlugin(config) {
   const { login = 'email', password = 'password', salt, userTable = 'User', firstname, lastname, plugins: { google, facebook } = {} } = config;
 
   let axios;
-  if(google || facebook) axios = getOptionalDep('axios', 'GooglePlugin');
+  if(google || facebook) axios = getOptionalDep('axios', 'LoginPlugin');
 
   return {
     middleware: (req, res, next) => {
@@ -108,7 +108,7 @@ function createLoginPlugin(config) {
       if(!table.index.find(elt => elt.column === login && elt.type === 'unique')) return Promise.reject(`${login} should be made a unique index in table ${userTable}. add a field index:['${login}/unique'] inside ${userTable}.`);
     },
     onRequest: {
-      [userTable] : (request, {query, update, read}) => {
+      [userTable] : (request, {query, local}) => {
         //Creating a user
         if(request.create) {
           return Promise.resolve().then(() => {
@@ -116,16 +116,16 @@ function createLoginPlugin(config) {
               //Someone is trying to register with google
               isString(google, request[google], userTable);
               return axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${request[google]}`).then(googleUserInfos => {
-                request[login] = googleUserInfos.data.email
-                if(firstname) request[firstname] = googleUserInfos.data.given_name
-                if(lastname) request[lastname] = googleUserInfos.data.family_name
+                request[login] = googleUserInfos.data.email;
+                if(firstname) request[firstname] = googleUserInfos.data.given_name;
+                if(lastname) request[lastname] = googleUserInfos.data.family_name;
                 request[password] = 'google';//As this is not a hash, no one will be able to connect with this without the access token
               });
             } else if(facebook && request[facebook] && request[login]) {
               //Someone is trying to register with facebook
               isString(login, request[login], userTable);
               isString(facebook, request[facebook], userTable);
-              return axios.get(`https://graph.facebook.com/${facebook_user_id}?fields=short_name,last_name,email,name&access_token=${facebook_access_token}`).then(result => {
+              return axios.get(`https://graph.facebook.com/${request[login]}?fields=short_name,last_name,email,name&access_token=${request[facebook]}`).then(result => {
                 request[login] = result.email;
                 if(firstname) request[firstname] = result.short_name;
                 if(lastname) request[lastname] = result.last_name;
@@ -162,13 +162,13 @@ function createLoginPlugin(config) {
               //Someone is trying to login with google
               isString(google, request[google], userTable);
               return axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${request[google]}`).then(googleUserInfos => {
-                request[login] = googleUserInfos.data.email
+                request[login] = googleUserInfos.data.email;
                 request[password] = 'google';
               });
             } else if(facebook && request[login] && request[facebook]) {
               isString(login, request[login], userTable);
               isString(facebook, request[facebook], userTable);
-              return axios.get(`https://graph.facebook.com/${facebook_user_id}?fields=short_name,last_name,email,name&access_token=${facebook_access_token}`).then(result => {
+              return axios.get(`https://graph.facebook.com/${request[login]}?fields=short_name,last_name,email,name&access_token=${request[facebook]}`).then(result => {
                 request[login] = result.email;
                 request[password] = 'facebook';//As this is not a hash, no one will be able to connect with this without the access token
               });
@@ -213,25 +213,25 @@ function createLoginPlugin(config) {
               }).then(({reservedId}) => {
                 delete request[password];
                 request.reservedId = reservedId;
-                const tokens = read('jwt') || {};
-                update('authId', reservedId);
+                const tokens = local.jwt || {};
+                local.authId = reservedId;
                 //If the log succeeds, we return a jwt token
                 return createJWT(reservedId)
                   .then(jwtToken => tokens[reservedId] = jwtToken)
-                  .then(() => update('jwt', tokens));
+                  .then(() => local.jwt = tokens);
               }).then(() => {
                 logger('info', request[login], 'just logged in');
               });
             }
-          })
+          });
         }
       }
     },
     onCreation: {
-      [userTable] : (createdObject, { update }) => {
+      [userTable] : (createdObject, { local }) => {
         const reservedId = createdObject.reservedId;
         //Once the user is created inside the database, we set the authId to treat each further command on his behalf
-        update('authId', reservedId);
+        local.authId = reservedId;
         return createJWT(reservedId)
           .then(jwt => {
             //Add the jwt to the created object
@@ -241,10 +241,10 @@ function createLoginPlugin(config) {
       }
     },
     onResult: {
-      [userTable] : (results, { read }) => {
+      [userTable] : (results, { local }) => {
         results.forEach(result => {
           const id = result.reservedId;
-          const tokens = read('jwt') || {};
+          const tokens = local.jwt || {};
           if(tokens[id]) {
             //In case of multiple user creation, set the jwt in the result of each request.
             result.jwt = tokens[id];
