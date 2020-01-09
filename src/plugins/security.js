@@ -1,3 +1,4 @@
+/** Security Plugin. Check the documentation **/
 const { security : securityModel } = require('../utils/types');
 const check = require('../utils/type-checking');
 const log = require('../utils/logger');
@@ -5,12 +6,11 @@ const { getOptionalDep } = require('../utils');
 
 const createSecurityPlugin = config => {
   check(securityModel, config);
-  const {app, domains, emailACME, requestPerMinute, helmet : helmetConfig } = config;
+  const {app, domains, webmaster, requestPerMinute, helmet : helmetConfig } = config;
   const RateLimit = getOptionalDep('express-rate-limit', 'SecurityPlugin');
   const cm = getOptionalDep('compose-middleware', 'SecurityPlugin');
   const helmet = getOptionalDep('helmet', 'SecurityPlugin');
   const greenlock = getOptionalDep('greenlock-express', 'SecurityPlugin');
-  const greenlockStore = getOptionalDep('greenlock-store-fs', 'SecurityPlugin');
     
   /** Limit the amount of request the server should handle per minute */
   const apiLimiter = new RateLimit({
@@ -26,21 +26,39 @@ const createSecurityPlugin = config => {
     next();
   }
   
-  log('warning', 'NOTICE:\nDo not call app.listen() when using the securityPlugin.\nPorts will be 80 and 443 and this cannot be changed. Run `sudo setcap \'cap_net_bind_service=+ep\' $(which node)` in order to use these ports with non without root access.');
-  greenlock
-    .create({
-      email: emailACME, // The email address of the ACME user / hosting provider
-      agreeTos: true, // You must accept the ToS as the host which handles the certs
-      configDir: '~/.config/acme/', // Writable directory where certs will be saved
-      telemetry: true, // Contribute telemetry data to the projec
-      store: greenlockStore,
-      approveDomains: domains,
-      // Using your express app:
-      // simply export it as-is, then include it here
-      app
-      //, debug: true
-    })
-    .listen(80, 443);
+  app.disable('x-powered-by');
+
+  log('warning', 'NOTICE:\nDo not call app.listen() when using the securityPlugin.\nPorts will be 80 and 443 and this cannot be changed. Run `sudo setcap \'cap_net_bind_service=+ep\' $(which node)` in order to use these ports without root access.');
+  greenlock.init(() => {
+    const greenlock = require('@root/greenlock').create({
+      // name & version for ACME client user agent
+      packageAgent: webmaster.split('@')[0],
+
+      // contact for security and critical bug notices
+      maintainerEmail: webmaster,
+
+      // where to find .greenlockrc and set default paths
+      packageRoot: __dirname,
+    });
+    greenlock.manager.defaults({
+      subscriberEmail: webmaster,
+      agreeToTerms: true
+    });
+    const subjects = domains.filter(domain => domain.split('\\.').length===2);
+    const others = domains.filter(domain => domain.split('\\.').length>2);
+    subjects.forEach(domain => {
+      const subDomains = others.filter(sub => sub.endsWith(domain));
+      greenlock.sites.add({
+        subject: domain,
+        altnames: [domain, ...subDomains]
+      });
+    });
+    return {
+      greenlock,
+      // whether or not to run at cloudscale
+      cluster: false
+    };
+  }).ready(glx => glx.serveApp(app));
   return {
     middleware: requestPerMinute ? cm.compose([apiLimiter, helmet(helmetConfig)]) : helmet(helmetConfig)
   };
