@@ -12,26 +12,12 @@ const userHashedPassword = crypto.pbkdf2Sync('password', '', 1, 64, 'sha512').to
 //This date will be used in our requests
 const date = new Date();
 
-function request(req) {
-  log('test request', req);
-  return axios.post('/', req);
-}
-function logResponse(response) {
-  log('test response', util.inspect(response.data, false, null, true), '\n');
-  return response;
-}
-function logError(response) {
-  log('test error response', response.message, util.inspect(response.response.data, false, null, true), '\n');
-  return response;
-}
-
 createTestServer()
   .then(() => log('test title', '\n', 'Test server ready'))
 
   // Registering 2 users
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Registration of 2 users'))
-    .then(() => request({
+  .then(() => positiveTest('Registration of 2 users',
+    {
       User : [
         {
           pseudo : 'User1',
@@ -47,13 +33,10 @@ createTestServer()
         }
       ]
     }))
-    .then(logResponse)
-  )
 
   //Forbidden: Registration of a user with the same email
-  .then(() => Promise.resolve()
-    .then(() => log('test error title', '\n', 'Forbidden: Registration of a user with the same email'))
-    .then(() => request({
+  .then(() => negativeTest('Forbidden: Registration of a user with the same email',
+    {
       User :
         {
           pseudo : 'User1',
@@ -62,28 +45,22 @@ createTestServer()
           create : true,
         },
     }))
-    .catch(logError)
-  )
   
   // Login as user1
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Login as User1'))
-    .then(() => request({
+  .then(() => positiveTest('Login as User1',
+    {
       User: {
         email: 'user1@email.com',
         password: userHashedPassword,
       }
     }))
-    .then(logResponse)
-  )
   
   //Use the jwt for user1 
   .then(response => axios.defaults.headers.common['Authorization'] = 'Bearer ' + response.data.User[0].jwt)
 
   //Getting accessible users with their contacts
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Getting user with their contacts'))
-    .then(() => request({
+  .then(() => positiveTest('Getting user with their contacts',
+    {
       User : {
         contacts: {
           email: 'user2@email.com',
@@ -91,13 +68,10 @@ createTestServer()
         }
       }
     }))
-    .then(logResponse)
-  )
   
   //Getting only users that have contacts
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Getting only users that have user2 as a contact'))
-    .then(() => request({
+  .then(() => positiveTest('Getting only users that have user2 as a contact',
+    {
       User : {
         contacts: {
           email: 'user2@email.com',
@@ -106,37 +80,28 @@ createTestServer()
         }
       }
     }))
-    .then(logResponse)
-  )
   
   //Retrieve all current user info
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Retrive current profile'))
-    .then(() => request({
+  .then(() => positiveTest('Retrive current profile',
+    {
       User: {
         email: 'user1@email.com',
         get: '*',
       }
     }))
-    .then(logResponse)
-  )
     
   //Forbidden : retrieve user2 private data
-  .then(() => Promise.resolve()
-    .then(() => log('test error title', '\n', 'Forbidden : Retrive profile from another user'))
-    .then(() => request({
+  .then(() => positiveTest('Restricted : Retrive profile from another user',
+    {
       User: {
         email: 'user2@email.com',
         get: '*',
       }
     }))
-    .then(logResponse)
-  )
 
   //Forbidden : Adding a user not invited as contact
-  .then(() => Promise.resolve()
-    .then(() => log('test error title', '\n', 'Forbidden : Adding a contact'))
-    .then(() => request({
+  .then(() => negativeTest('Forbidden : Adding a contact',
+    {
       User: {
         email : 'user1@email.com',
         contacts : {
@@ -144,13 +109,21 @@ createTestServer()
         }
       }
     }))
-    .catch(logError)
-  )
   
+  //Forbidden : Inviting oneself as contact
+  .then(() => negativeTest('Forbidden : Inviting oneself as a contact',
+    {
+      User: {
+        email : 'user1@email.com',
+        invited : {
+          add : {email: 'user1@email.com'},
+        }
+      }
+    }))
+    
   //Invite a user as contact
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Inviting a user as contact'))
-    .then(() => request({
+  .then(() => positiveTest('Inviting a user as contact',
+    {
       User: {
         email : 'user1@email.com',
         invited : {
@@ -158,27 +131,32 @@ createTestServer()
         }
       }
     }))
-    .then(logResponse)
-  )
 
+  //Forbidden : Adding a contact as contact
+  .then(() => negativeTest('Forbidden : Inviting a contact as a contact',
+    {
+      User: {
+        email : 'user1@email.com',
+        contacts : {
+          add : {email: 'user2@email.com'},
+        }
+      }
+    }))
+  
   // Login as user2
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Login as User2'))
-    .then(() => request({
+  .then(() => positiveTest('Login as User2',
+    {
       User: {
         email: 'user2@email.com',
         password: userHashedPassword,
       }
     }))
-    .then(logResponse)
-  )
   //Use the jwt for user12
   .then(response => axios.defaults.headers.common['Authorization'] = 'Bearer ' + response.data.User[0].jwt)
 
   //Adding a user invited as contact
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Adding a contact'))
-    .then(() => request({
+  .then(() => positiveTest('Adding a contact',
+    {
       User: {
         email : 'user2@email.com',
         contacts : {
@@ -186,13 +164,10 @@ createTestServer()
         }
       }
     }))
-    .then(logResponse)
-  )
 
   //Creating a feed
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Creating a feed for the users'))
-    .then(() => request({
+  .then(() => positiveTest('Creating a feed for the users',
+    {
       Feed: {
         create : true,
         participants : [
@@ -201,13 +176,10 @@ createTestServer()
         ]
       }
     }))
-    .then(logResponse)
-  )
 
   //Creating a message
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Creating a message'))
-    .then(() => request({
+  .then(() => positiveTest('Creating a message',
+    {
       Feed : {
         participants : [
           { email : 'user1@email.com' },
@@ -225,13 +197,10 @@ createTestServer()
         }
       }
     }))
-    .then(logResponse)
-  )
 
   //Editing all messages between 2 dates
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Editing all messages between 2 dates'))
-    .then(() => request({
+  .then(() => positiveTest('Editing all messages between 2 dates',
+    {
       Comment : {
         title : 'Test',
         author: {
@@ -246,13 +215,10 @@ createTestServer()
         }
       }
     }))
-    .then(logResponse)
-  )
 
   //Retrieving messages using limit, offset and order
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Retrieving messages using limit, offset and order'))
-    .then(() => request({
+  .then(() => positiveTest('Retrieving messages using limit, offset and order',
+    {
       Comment : {
         author: {
           email : 'user2@email.com',
@@ -263,13 +229,10 @@ createTestServer()
         get : '*',
       }
     }))
-    .then(logResponse)
-  )
 
   //Forbidden : editing another user data
-  .then(() => Promise.resolve()
-    .then(() => log('test error title', '\n', 'Forbidden : Edit another user'))
-    .then(() => request({
+  .then(() => negativeTest('Forbidden : Edit another user',
+    {
       User : {
         email: 'user1@email.com',
         set: {
@@ -277,13 +240,10 @@ createTestServer()
         }
       }
     }))
-    .catch(logError)
-  )
 
   //Editing our personal data
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Edit our personal data'))
-    .then(() => request({
+  .then(() => positiveTest('Edit our personal data',
+    {
       User : {
         email: 'user2@email.com',
         set: {
@@ -291,25 +251,19 @@ createTestServer()
         }
       }
     }))
-    .then(logResponse)
-  )
 
   //Forbidden : deleting another user
-  .then(() => Promise.resolve()
-    .then(() => log('test error title', '\n', 'Forbidden : Deleting another user'))
-    .then(() => request({
+  .then(() => negativeTest('Forbidden : Deleting another user',
+    {
       User : {
         email: 'user1@email.com',
         delete : true,
       }
     }))
-    .catch(logError)
-  )
 
   //Deleting our own message
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Deleting our own message'))
-    .then(() => request({
+  .then(() => positiveTest('Deleting our own message',
+    {
       Comment: {
         author: {
           email : 'user2@email.com',
@@ -318,22 +272,17 @@ createTestServer()
         delete: true,
       }
     }))
-    .then(logResponse)
-  )
 
   //Deleting user
-  .then(() => Promise.resolve()
-    .then(() => log('test title', '\n', 'Deleting our own data'))
-    .then(() => request({
+  .then(() => positiveTest('Deleting our own data',
+    {
       User : {
         email: 'user2@email.com',
         delete : true,
       }
     }))
-    .then(logResponse)
-  )
 
-  //Server-side request test
+  //Concurrent server-side request test
   .then(() => {
     return Promise.all([getQuery('simpleql').then(query => query({User: {
       pseudo : 'Admin',
@@ -356,3 +305,43 @@ createTestServer()
       console.error(err);
     }
   }).then(process.exit);
+
+
+
+
+function request(req) {
+  log('test request', req);
+  return axios.post('/', req);
+}
+function logResponse(response) {
+  log('test response', util.inspect(response.data, false, null, true), '\n');
+  return response;
+}
+function logError(response) {
+  log('test error response', response.message, util.inspect(response.response.data, false, null, true), '\n');
+  return response;
+}
+function shouldFail(response) {
+  console.error('The previous request succeeded whereas it should have failed');
+  log('test response', util.inspect(response.data, false, null, true), '\n');
+  process.exit();
+}
+function shouldSucceed(response) {
+  console.error('The previous request failed whereas it should have succeeded');
+  log('test error response', response.message, util.inspect(response.response.data, false, null, true), '\n');
+  process.exit();
+}
+function positiveTest(name, query) {
+  return Promise.resolve()
+    .then(() => log('test title', '\n', name))
+    .then(() => request(query))
+    .then(logResponse)
+    .catch(shouldSucceed);
+}
+function negativeTest(name, query) {
+  return Promise.resolve()
+    .then(() => log('test error title', '\n', name))
+    .then(() => request(query))
+    .then(shouldFail)
+    .catch(logError);
+}
