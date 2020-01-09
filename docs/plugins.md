@@ -91,9 +91,7 @@ const onResult = {
 This callback is called when the whole request will succeed and the changes will be committed to the database. It will receive the [onEvent parameters](#onevent-parameters) as second parameter. It is probably not recommanded to throw an error at this point.
 
 ```javascript
-const onSuccess = {
-    User : (results, {request, query, local, isAdmin }) => Promise.resolve()
-}
+const onSuccess = (results, {request, query, local, isAdmin }) => Promise.resolve()
 ```
 
 ### onError
@@ -101,9 +99,7 @@ const onSuccess = {
 This callback is called when the whole request will fail and the changes made to the database will be rolled back. It will receive the [onEvent parameters](#onevent-parameters) as second parameter.
 
 ```javascript
-const onError = {
-    User : (error, {request, query, local, isAdmin}) => Promise.resolve()
-}
+const onError = (error, {request, query, local, isAdmin}) => Promise.resolve()
 ```
 
 ### errorHandler
