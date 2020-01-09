@@ -1,4 +1,4 @@
-
+/** This file contains the Driver that will convert SimpleQL requests into MySQL queries **/
 const { WRONG_VALUE, CONFLICT } = require('../errors');
 
 const mysql = {};

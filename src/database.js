@@ -1,3 +1,4 @@
+/** This is the core of SimpleQL where every request is cut in pieces and transformed into a query to the database */
 const readline = require('readline');
 const { isPrimitive, classifyRequestData, operators, sequence } = require('./utils');
 const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, DATABASE_ERROR, WRONG_VALUE, CONFLICT } = require('./errors');
@@ -595,7 +596,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
               .then(() => {
                 if(ruleSet.write) return ruleSet.write(ruleData).catch(err => err);
               }).then(err => {
-              //Manage set instructions
+                //Manage set instructions
                 return Promise.resolve().then(() => {
                   if(!request.set) return Promise.resolve();
                   const { primitives : setPrimitives, objects : setObjects } = classifyRequestData(request.set, table);

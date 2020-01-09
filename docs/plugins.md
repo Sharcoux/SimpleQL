@@ -4,121 +4,9 @@ To handle server-side logic and custom behaviours, you can add plugins that we p
 
 ## Provided plugins
 
-Only one plugin is currently available. More are coming!
-
-### Login
-
-We provide a plugin to handle login to the server through a JWT token or a couple email/password. The passwords are hashed and *(optionnaly)* salted.
-
-The login plugin takes an object parameter containing 5 properties:
-
- * **userTable** : The name of the table beeing used to store the users
- * **login** : The column being used to store the logins
- * **password** : The column being used to store the passwords
- * **salt** *(optional)* : The column being used to store the salts encrypting the password
- * **plugins** *(optionnal)* : An object describing optionnal behaviours that you may or may not activate for loggin. This object supports the following plugins:
-    * **google** : the name of the property to look for the google access token.
-    * **facebook** : the name of the property to look for the facebook access token.
-
-**Example**
-
-```javascript
-const { login : { loginPlugin } } = require('simple-ql');
-const plugins = [
-  loginPlugin({
-    login: 'email',
-    password: 'password',
-    salt: 'salt',
-    userTable: 'User',
-  }),
-];
-```
-
-To log into a table, just send the following request:
-
-```javascript
-const request = {
-  User : {
-    email : 'myLogin',
-    password : 'myPassword',
-  }
-}
-```
-
-You will receive a SimpleQL response of this type
-
-```javascript
-{
-  User : {
-    email : 'myLogin',
-    jwt : 'jwt token',
-  }
-}
-```
-
-#### Google and Facebook authentication
-
-This is how you can enable Google and Facebook authentication:
-
-```javascript
-  loginPlugin({
-    login: 'email',
-    password: 'password',
-    salt: 'salt',
-    userTable: 'User',
-    plugins: {
-        google: 'googleToken',//This will enable Google authentication when googleToken property is provided in requests
-        facebook: 'facebookToken'//This will enable Facebook authentication when facebookToken property is preovided in requests
-    }
-  }),
-```
-
-This is how you can log in a user with Facebook:
-
-```javascript
-{
-  User : {
-    login : '<facebook userId>',
-    facebookToken : '<facebook access token>',
-  }
-}
-```
-
-This is how you can sign in a user with Google:
-
-```javascript
-{
-  User : {
-    googleToken : '<google access token>',
-    create: true,
-  }
-}
-```
-
-**Note**: Don't forget to register your domain on Facebook and Google to enable this kind of access.
-
-
-### Security
-
-We provide a security plugin that will enforce basic security settings for your application, including https support, headers security and requests rate limite.
-
-The login plugin takes an object parameter containing 4 properties:
-
- * **app** : The app created with express
- * **domains** : The list of domains for which you would like a https support. Make sure that the DNS points towards you server.
- * **emailACME** : The email address of the ACME user / hosting provider
- * **requestPerMinute** *(optional)* : The maximum amount of request that the server should handle.
- * **helmet** *(optional)* : helmet parameters. [See the documentation](https://helmetjs.github.io/docs/). Default parameters will be used if it is not provided.
-
- *Example:*
-
-```javascript
- if(process.env.NODE_ENV==='production') plugins.push(securityPlugin({
-  app,
-  domains: ['mydomain.com', 'www.mydomain.com'],
-  emailACME: 'webmaster@mydomain.com',
-}));
-```
+We provide the following plugins. More are coming!
+1. [Login Plugin](plugins/login.md)
+2. [Security Plugin](plugins/security.md)
 
 ## Express middleware and error handler
 
@@ -164,7 +52,7 @@ This is an object describing all the functions that should be called when a requ
 
 ```javascript
 const onRequest = {
-    User : (request, {request, parent, query, local, isAdmin}) => Promise.resolve()
+    User : (request, {parent, query, local, isAdmin}) => Promise.resolve()
 }
 ```
 
@@ -204,7 +92,7 @@ This callback is called when the whole request will succeed and the changes will
 
 ```javascript
 const onSuccess = {
-    User : (request, results) => Promise.resolve()
+    User : (results, {request, query, local, isAdmin }) => Promise.resolve()
 }
 ```
 
@@ -214,7 +102,7 @@ This callback is called when the whole request will fail and the changes made to
 
 ```javascript
 const onError = {
-    User : (error, {request, parent, query, local, isAdmin}) => Promise.resolve()
+    User : (error, {request, query, local, isAdmin}) => Promise.resolve()
 }
 ```
 

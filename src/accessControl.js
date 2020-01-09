@@ -1,3 +1,4 @@
+/** Provide a set of functions that will act as rules to build the access restriction to any element from the database */
 const { any, sequence, classifyData } = require('./utils');
 const { DATABASE_ERROR } = require('./errors');
 
@@ -98,14 +99,16 @@ function count(field, { amount, min, max} = {}) {
   };
 }
 
+/** Look in different places to see if the function isValid is true for the privded field */
 function checkInTable({field, tables, tableName, authId, object, request, requestFlag, query, ruleName, isValid}) {
   if(requestFlag) {
+    //If the requestFlag is set, we check inside the request itself
     const obj = getObjectInRequest(request, field);
     if(!obj) return Promise.reject(`${ruleName}(${field}) rule: The field ${field} is required in requests ${JSON.stringify(request)} in table ${tableName}.`);
     if(!Array.isArray(obj)) return isValid([obj]) ? Promise.resolve() : Promise.reject(`${ruleName}(${field}) rule: The field ${field}.reservedId must be ${authId} in request ${JSON.stringify(request)} in table ${tableName}.`);
     return isValid(obj) ? Promise.resolve() : Promise.reject(`${ruleName}(${field}) rule: ${authId} could not be found in ${field} of ${JSON.stringify(request)} in ${tableName}.`);
-    //We are looking inside the object result
   } else if(tables[tableName][field]) {
+    //We check if the current object contains a property with the field name, and if the 
     return query({
       [tableName] : {
         reservedId : object.reservedId,
@@ -116,6 +119,7 @@ function checkInTable({field, tables, tableName, authId, object, request, reques
       return Promise.resolve();
     });
   } else {
+    //We check if the field denotes a whole table and if this table contains a property that could match
     const target = getTargetObject(object, field);
     if(target) {
       if(!Array.isArray(target)) {

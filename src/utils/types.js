@@ -45,7 +45,7 @@ const security = {
   requestPerMinute: 'number',
   required: ['app', 'domains', 'emailACME'],
   strict: true,
-}
+};
 
 module.exports = {
   dbColumn,

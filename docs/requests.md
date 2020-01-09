@@ -64,7 +64,7 @@ For instance, the following request will get you the details about all users for
 
 ## Required keyword
 
-When want to request a table that contains a column defined as an array of an other table (association tables), for instance: `contacts: [User]`, you need to precise if you want the constraints on this column to be mandatory or not.
+When you want to request a table that contains a column defined as another table or an array of another table (association tables), for instance: `contacts: [User]`, you need to precise if you want the constraints on this column to be mandatory or not.
 
 The following request will get you all the Users named 'John Doe', and for each of them, the list of their contacts.
 
@@ -78,7 +78,7 @@ The following request will get you all the Users named 'John Doe', and for each 
 }
 ```
 
-On the other hand, the following request will get you only the Users named 'John Doe' and who do have contacts
+On the other hand, the following request will get you only the Users named 'John Doe' and who does have contacts
 
 ```javascript
 {

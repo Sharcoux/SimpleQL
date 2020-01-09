@@ -1,3 +1,4 @@
+/** This is a template file to create more drivers **/
 class Driver {
   constructor() {
     this.query = this.query.bind(this);

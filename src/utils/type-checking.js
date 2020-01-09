@@ -1,3 +1,4 @@
+/** Custom type checking system to detect any error coming from a user and provide the most possible accurate error message */
 const { stringify } = require('./');
 
 /** Check that the data matches the model */

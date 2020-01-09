@@ -1,3 +1,4 @@
+/** Login Plugin. Check the documentation **/
 const { BAD_REQUEST, NOT_FOUND, WRONG_PASSWORD } = require('../errors');
 const crypto = require('crypto');
 const check = require('../utils/type-checking');
