@@ -23,7 +23,7 @@ function or(...rules) {
 
 /** Rule that enables anyone that doesn't fulfill the provided rule */
 function not(rule) {
-  return preParams => params => new Promise((resolve, reject) => rule(preParams)(params).then(reject, resolve));
+  return preParams => params => new Promise((resolve, reject) => rule(preParams)(params).then(() => reject('`not` rule: the inner rule succeeded'), resolve));
 }
 
 /** If this rule is used, the inner rules will now apply to the request instead of the database */

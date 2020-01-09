@@ -119,7 +119,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           .map(plugin => plugin[event] && plugin[event][tableName])
           //Keep only the plugins that have such a callback
           .filter(eventOnTable => eventOnTable)
-          .map(callback => () => callback(data, {parent : parentRequest, query, local, isAdmin : local.authId === privateKey}))
+          .map(callback => () => callback(data, {request, parent : parentRequest, query, local, isAdmin : local.authId === privateKey}))
         );
       }
 
@@ -637,11 +637,10 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                 //Manage add instructions
                   .then(() => sequence(arrays.map(key => () => {
                     if(!request[key].add) return Promise.resolve();
-                    if(ruleSet[key] && ruleSet[key].add) ruleSet[key].add(ruleData);
                     return Promise.resolve().then(() => {
                       if(ruleSet[key] && ruleSet[key].add) return ruleSet[key].add(ruleData);
                       else if(err) return Promise.reject(err);
-                    }).catch(err => console.error(err) || Promise.reject({
+                    }).catch(err => Promise.reject({
                       name : UNAUTHORIZED,
                       message : `You are not allowed to create ${key} in table ${tableName}. Error : ${err.message || err}`
                     }));
