@@ -285,7 +285,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             else {
             //We get the children id and define the key+Id property accordingly
               return applyInTable(request[key], table[key].tableName).then(result => {
-                if(result.length===0) return Promise.reject({
+                if(result.length===0 && request[key].required) return Promise.reject({
                   name: NOT_FOUND,
                   message: `Nothing found with these constraints : ${tableName}->${key}->${JSON.stringify(request[key])}`,
                 });
