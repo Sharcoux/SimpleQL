@@ -89,7 +89,7 @@ If you need to provide more details, you can use an object to describe your data
 
 ## Indexes
 
-To create an index to your table, simply add an `index` entry to your object. The value should ba an array containing the indexes.
+To create an index to your table, simply add an `index` entry to your object. The value should be an array containing the indexes.
 
 There are 2 ways to describe an index:
 
@@ -123,6 +123,8 @@ If you need to provide more details, you can use an object to describe your data
  * **length** (in byte)
 
 You can generate an index over multiple columns. In this case, you must use the object form and provide a table for `column` and optionally for `length`.
+
+**Notice:** The indexed column cannot reference an association field (like `mentor`  or `contacts` in our example). The only exception is using an array of column, where you can index some Object fields (like `mentor`), but not an Array field (like `contacts`).
 
 **Example:**
 

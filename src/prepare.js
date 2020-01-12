@@ -27,7 +27,7 @@ function prepareTables(tables) {
             //Index length
             if(!isNaN(value)) result.length = Number.parseInt(value, 10);
             //Index column name
-            else if(primitives.includes(value)) result.column = value;
+            else if(tables[tableName][value]) result.column = value;
             //Index type
             else if(['unique', 'fulltext', 'spatial'].includes(value)) result.type = value;
             else throw new Error(`The value ${value} for index of table ${table.tableName} could not be interpreted, nor as a type, nor as a column, nor as a length. Check the documentation.`);
@@ -61,10 +61,18 @@ function prepareTables(tables) {
         unsigned : true,
       };
       //We need to change the index accordingly
-      if(acc[tableName].index && acc[tableName].index.find(index => index.column === key)) {
-        // const index = acc[tableName].index.find(index => index.column === key);
-        // if(index) index.column = key+'Id';
-        throw new Error(`indexes on keys referencing foreign tables will be ignored. Please remove index ${key} from table ${tableName}.`);
+      if(acc[tableName].index) {
+        acc[tableName].index.forEach(index => {
+          //Rewrite the column name for name + Id
+          if(Array.isArray(index.column)) {
+            const keyIndex = index.column.findIndex(c => c===key);
+            if(keyIndex>=0) index.column[keyIndex] = key + 'Id';
+          } else if(index.column === key) {
+            index.column = key + 'Id';
+          }
+          //Indexes on object table alone are ignored
+          if(index.column === key) throw new Error(`indexes on keys referencing foreign tables will be ignored, except for composite indexes. Please remove index ${key} from table ${tableName}.`);
+        });
       }
       acc[tableName].foreignKeys = {
         [key+'Id'] : table[key].tableName,
@@ -73,7 +81,9 @@ function prepareTables(tables) {
     //Create an association table. contacts = [User] creates a map contactsUser = {userId : 'integer/10', contactsId : 'integer/10'}
     arrays.forEach(key => {
       const name = key+tableName;
-      if(acc[tableName].index && acc[tableName].index.find(index => index.column === key)) {
+      const index = acc[tableName].index;
+      //Indexes on array
+      if(index && index.find(index => index.column === key || (Array.isArray(index.colum) && index.column.find(c => c===key)))) {
         throw new Error(`indexes on keys referencing foreign tables will be ignored. Please remove index ${key} from table ${tableName}.`);
       }
       acc[name] = {
@@ -103,10 +113,18 @@ function prepareTables(tables) {
     });
 
     if(table.index) table.index.forEach(elt => {
+      //Ensure that the column exists for the index
       if(!elt.column) throw new Error(`An index entry doesn't precise any column to refer to in table ${tableName}.`);
-      const column = acc[tableName][elt.column];
-      if(!column) throw new Error(`The index entry ${elt.column} doesn't match any column in table ${tableName}.`);
-      if(elt.length && column.length && elt.length>column.length) throw new Error(`The length for index ${elt.column} is larger than the length of the column specified in the table ${tableName}.`);
+      const columns = Array.isArray(elt.column) ? elt.column : [elt.column];acc[tableName][elt.column];
+      const unfoundColumn = columns.find(column => column==='index' || !acc[tableName][column]);
+      if(unfoundColumn) throw new Error(`The index entry ${unfoundColumn} doesn't match any column in table ${tableName}.`);
+
+      //Check that the index length is not longer than the column length
+      if(elt.length && columns.every(column => acc[tableName][column].length)) {
+        //The sum of the lengths in case of composite indexes
+        const sum = columns.reduce((sum, column) => sum + acc[tableName][column].length, 0);
+        if(elt.length>sum) throw new Error(`The length for index ${elt.column} is larger than the length of the column specified in the table ${tableName}.`);
+      }
     });
 
     return acc;
