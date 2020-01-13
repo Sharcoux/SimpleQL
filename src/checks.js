@@ -166,7 +166,7 @@ function checkRules(rules, tables) {
 
 /** Check that all provided plugins are well formed. */
 function checkPlugins(plugins, tables) {
-  const pluginKeys = ['middleware', 'onRequest', 'onCreation', 'onDeletion', 'onResult', 'onError', 'onSuccess', 'preRequisite', 'errorHandler'];
+  const pluginKeys = ['middleware', 'onRequest', 'onProcessing', 'onCreation', 'onDeletion', 'onResult', 'onError', 'onSuccess', 'preRequisite', 'errorHandler'];
   if(!Array.isArray(plugins)) return Promise.reject(`plugins should be an array. But we received ${JSON.stringify(plugins)}.`);
   return Promise.all(plugins.map(plugin => {
     return Promise.all(Object.keys(plugin).map(key => {

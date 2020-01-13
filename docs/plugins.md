@@ -22,12 +22,13 @@ createServer({app, tables, database, rules, plugins, middlewares, errorHandler})
 
 ## Create your own plugin
 
-['middleware', 'onRequest', 'onCreation', 'onDeletion', 'onResult', 'preRequisite', 'errorHandler'];
+['middleware', 'onRequest', 'onProcessing', 'onCreation', 'onDeletion', 'onResult', 'preRequisite', 'errorHandler'];
 A plugin consist in an object containing the following optional properties:
 
  * **preRequisite** : A function that will make sure that the plugin is correctly configured.
  * **middleware** : A middleware that might intercept the whole request.
  * **onRequest** : An object containing functions being called before any request in a specific table.
+ * **onProcessing** : An object containing functions being called after the execution of every depending request, but before any changes have been applied to the current results.
  * **onCreation** : An object containing functions being called each time an element is created into a specific table.
  * **onDeletion** : An object containing functions being called each time an element is deleted from a specific table.
  * **onResult** : An object containing functions being called after a request was resolved in a specific table.
@@ -55,6 +56,18 @@ const onRequest = {
     User : (request, {parent, query, local, isAdmin}) => Promise.resolve()
 }
 ```
+
+### onProcessing
+
+This is an object describing all the functions that should be called after the depending requests, the `get` and `create` instructions have been resolved, but before the `set`, `delete`, `add` and `remove` instructions have been executed. The results are the elements found in the database that match the constraints up to now. It will receive the [onEvent parameters](#onevent-parameters) as second parameter.
+
+```javascript
+const onProcessing = {
+    User : (results, {request, parent, query, local, isAdmin}) => Promise.resolve()
+}
+```
+
+**Notice:** This won't be called when using `readOnly` option in `query`.
 
 ### onCreation
 

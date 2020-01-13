@@ -145,7 +145,7 @@ function customRule() {
     //We give admin rights to this request to be able to read the data from the database, but we set readOnly mode to be safer.
     { admin: true, readOnly : true }).then(results => {
       //If we found no Feed matching the request, we reject the access to the message content.
-      return results.Feed.length>0 ? Promise.resolve() : Promise.reject('Only feed participants can read message content');
+      return results.Feed.length>0 ? Promise.resolve() : Promise.reject({status: 401, message: 'Only feed participants can read message content'});
     });
   };
 }
@@ -165,32 +165,24 @@ function customRule() {
  */
 const customPlugin = {
   //This part will edit the request before querying the database
-  onRequest: {
-    User: async (request, {query, local, isAdmin}) => {
+  onProcessing: {
+    User: async (results, {request, query, local, isAdmin}) => {
       if(isAdmin) return Promise.resolve();//We don't control admin requests
       //When we invite a contact, we want to make sure that some rules are respected
       if((request.invited && request.invited.add) || (request.contacts && request.contacts.add)) {
         //This is the list of contacts being added
         const invited = ((!request.invited || !request.invited.add) ? [] : Array.isArray(request.invited.add) ? request.invited.add : [request.invited.add]);
         const contacts = ((!request.contacts || !request.contacts.add) ? [] : Array.isArray(request.contacts.add) ? request.contacts.add : [request.contacts.add]);
-
-        //This is just extracting pseudo and email values from a request
-        function extractConstraints({pseudo, email}) {
-          const constraints = {};
-          if(pseudo) constraints.pseudo = pseudo;
-          if(email) constraints.email = email;
-          return constraints;
-        }
       
         //We need the user's contacts and invited list
-        const { User: [user] } = await query({ User: {...extractConstraints(request), get: ['invited', 'contacts'] }}, { admin: true, readOnly: true });
+        const { User: [user] } = await query({ User: { reservedId: results.map(u => u.reservedId), get: ['invited', 'contacts'] }}, { admin: true, readOnly: true });
         if(!user) return Promise.reject({status: 404, message: `No user was found with email ${request.email}`});
         const userId = user.reservedId;
 
-        //We get the contacts data of the contacts being invited
-        const { User: addInvited } = !invited.length ? { User: [] } : await query({ User: invited.map(u => ({ ...extractConstraints(u), get: ['contacts', 'invited']}))}, { admin: true, readOnly: true});
-        //We get the contacts data of the contacts being added
-        const { User: addContacts } = !contacts.length ? { User: [] } : await query({ User: contacts.map(u => ({...extractConstraints(u), get: ['contacts', 'invited']}))}, { admin: true, readOnly: true});
+        //We get the contacts data of the contacts being invited. We take good care to only read the data as we will need access root!
+        const { User: addInvited } = !invited.length ? { User: [] } : await query({ User: invited.map(i => ({...i, get: ['contacts', 'invited']}))}, { admin: true, readOnly: true});
+        //We get the contacts data of the contacts being added. We take good care to only read the data as we will need access root!
+        const { User: addContacts } = !contacts.length ? { User: [] } : await query({ User: contacts.map(i => ({...i, get: ['contacts', 'invited']}))}, { admin: true, readOnly: true});
 
         const invitedIds = addInvited.map(u => u.reservedId);
         const contactsIds = addContacts.map(u => u.reservedId);
@@ -199,7 +191,7 @@ const customPlugin = {
         const allContactsIds = [...userInvitedIds, ...userContactsIds];
 
         //If the user tries to add itself we deny the request
-        if([...invitedIds, ...contactsIds].includes(userId)) return Promise.reject(`User ${userId} cannot add itself as a contact.`);
+        if([...invitedIds, ...contactsIds].includes(userId)) return Promise.reject({status: 403, message: `User ${userId} cannot add itself as a contact.`});
 
         //If the user tries to invite someone that already has them as one of their contact member, we make it a contact instead
         const granted = addInvited.filter(contact => [...contact.contacts, ...contact.invited].map(u => u.reservedId).includes(userId));
@@ -233,9 +225,9 @@ const customPlugin = {
         //If the user tries to add as contact someone that didn't invite them nor as them as contact, we deny the request
         if(alreadyIn = addContacts.find(contact => ![...contact.invited, ...contact.contacts].find(u => u.reservedId===userId))) return Promise.reject({ status: 401, message: `The User ${alreadyIn.reservedId} must invite User ${userId} before User ${userId} can add it as a contact.`});
         //If we try to invite a user already in our contacts or invited list, we deny the request
-        else if(alreadyIn = invitedIds.find(id => allContactsIds.includes(id))) return Promise.reject({ status: 401, message: `The User ${alreadyIn} is already in the contacts of User ${userId}.`});
+        else if(alreadyIn = invitedIds.find(id => allContactsIds.includes(id))) return Promise.reject({ status: 403, message: `The User ${alreadyIn} is already in the contacts of User ${userId}.`});
         //If we try to add a contact which is already in our contacts list, we deny the request
-        else if(alreadyIn = contactsIds.find(id => userContactsIds.includes(id))) return Promise.reject({ status: 401, message: `The User ${alreadyIn} is already a contact of User ${userId}.`});
+        else if(alreadyIn = contactsIds.find(id => userContactsIds.includes(id))) return Promise.reject({ status: 403, message: `The User ${alreadyIn} is already a contact of User ${userId}.`});
         //If we try to add as contact someone we already invited, we need to remove it from the invited list.
         const alreadyInvited = contactsIds.filter(id => userInvitedIds.includes(id));
         if(alreadyInvited.length>0) await query({ User: { reservedId: userId, invited: { remove: { reservedId: alreadyInvited } } }}, { admin: true });
@@ -246,12 +238,14 @@ const customPlugin = {
           local.invited = addInvited;//We save the id to manually add them to the result (cf onResult). This is not necessary, and just for demonstration purpose
         }
       }
-    },
+    }
+  },
+  onRequest: {
     Comment: (request, { parent }) => {
       //In case of message creation, the feed might not exist yet
       if(request.create) {
         //We want to make sure that the message belongs to a feed. The way to do so is to ensure that the parent of this request is Feed.
-        if(!parent || parent.tableName!=='Feed') return Promise.reject('Comments must belong to a feed.');
+        if(!parent || parent.tableName!=='Feed') return Promise.reject({ status: 400, message: 'Comments must belong to a feed.'});
         //Upon creation, we set the fields `date` and `lastModification`.
         const date = new Date().toISOString();
         request.date = date;

@@ -177,8 +177,9 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
               .then(results => {
               //In read only mode, skip the following steps
                 if(local.readOnly) return results;
+                return pluginCall(results, 'onProcessing')
                 //If request.delete is set, we need to make the access control prior to altering the tables
-                return (request.delete ? controlAccess(results) : Promise.resolve(results))
+                  .then(() => (request.delete && controlAccess(results))).then(() => results)
                 //Delete elements from the database if request.delete is set
                   .then(remove)
                 //Update table data
