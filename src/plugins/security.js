@@ -3,6 +3,8 @@ const { security : securityModel } = require('../utils/types');
 const check = require('../utils/type-checking');
 const log = require('../utils/logger');
 const { getOptionalDep } = require('../utils');
+const fs = require('fs');
+const path = require('path');
 
 const createSecurityPlugin = config => {
   check(securityModel, config);
@@ -19,36 +21,42 @@ const createSecurityPlugin = config => {
   }
 
   log('warning', 'NOTICE:\nDo not call app.listen() when using the securityPlugin.\nPorts will be 80 and 443 and this cannot be changed. Run `sudo setcap \'cap_net_bind_service=+ep\' $(which node)` in order to use these ports without root access.');
-  greenlock.init(() => {
-    const greenlock = require('@root/greenlock').create({
-      // name & version for ACME client user agent
-      packageAgent: webmaster.split('@')[0],
+  const packageRoot = __dirname;
+  const configDir = 'greenlock.d';
+  fs.mkdirSync(path.normalize(path.join(packageRoot, configDir)), { recursive: true });
 
-      // contact for security and critical bug notices
-      maintainerEmail: webmaster,
-
-      // where to find .greenlockrc and set default paths
-      packageRoot: __dirname,
-    });
-    greenlock.manager.defaults({
-      subscriberEmail: webmaster,
-      agreeToTerms: true
-    });
-    const subjects = domains.filter(domain => domain.split('\\.').length===2);
-    const others = domains.filter(domain => domain.split('\\.').length>2);
-    subjects.forEach(domain => {
-      const subDomains = others.filter(sub => sub.endsWith(domain));
-      greenlock.sites.add({
-        subject: domain,
-        altnames: [domain, ...subDomains]
-      });
-    });
+  const subjects = domains.filter(domain => domain.split('\\.').length===2);
+  const others = domains.filter(domain => domain.split('\\.').length>2);
+  const sites = subjects.map(domain => {
+    const subDomains = others.filter(sub => sub.endsWith(domain));
     return {
-      greenlock,
-      // whether or not to run at cloudscale
-      cluster: false
+      subject: domain,
+      altnames: [domain, ...subDomains]
     };
-  }).ready(glx => glx.serveApp(app));
+  });
+
+  //Read the current config file
+  const configRawContent = fs.readFileSync(path.normalize(path.join(packageRoot, configDir, 'config.json')));
+
+  //Update sites with available data if exist
+  if(configRawContent) {
+    const config = JSON.parse(configRawContent);
+    sites.map(({subject, altNames}) => {
+      const configSiteData = config.find(site => site.subject===subject) || {};
+      return {...configSiteData, subject, altNames};
+    });
+  }
+
+  //Write the updated file content
+  fs.writeFileSync(path.normalize(path.join(packageRoot, configDir, 'config.json')), JSON.stringify({ sites }, null, 4));
+
+  greenlock.init({
+    packageRoot,
+    configDir,
+    maintainerEmail: webmaster,
+    cluster: false      // name & version for ACME client user agent
+  }).serve(app);
+
   return {
     middleware: helmet(helmetConfig)
   };

@@ -288,7 +288,7 @@ const plugins = [];
 if(process.env.NODE_ENV==='production') plugins.push(securityPlugin({
   app,
   domains: ['mydomain.com', 'www.mydomain.com'],
-  emailACME: 'webmaster@mydomain.com',
+  webmaster: 'webmaster@mydomain.com',
 }));
 
 //Add a plugin that enables basic login/password authentication
