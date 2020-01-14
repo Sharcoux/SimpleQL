@@ -279,8 +279,8 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           log('resolution part title', 'getObjects');
           //We resolve the children objects
           return sequence(objects.map(key => () => {
-          //Take care of null value
-            if(request[key]===null) {
+            //If we are looking for null value...
+            if(!request[key]) {
               request[key] = null;
               return Promise.resolve();
             }
@@ -327,8 +327,8 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             });
             //Add primitives values to be created
             primitives.forEach(key => element[key] = request[key]);
-            //List the object found to the new element
-            objects.forEach(key => element[key+'Id'] = request[key].reservedId);
+            //Link the object found to the new element if an object was found
+            objects.forEach(key => element[key+'Id'] = request[key] ? request[key].reservedId : null);
             //Create the elements inside the database
             return driver.create({ table : tableName, elements : element })
               .then(([reservedId]) => {
@@ -396,9 +396,14 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
         function resolveObjects(results) {
           log('resolution part title', 'resolveObjects');
           return sequence(objects.map(key => () => sequence(results.map(result => () => {
+            //If we are looking for null values, no need to query the foreign table.
+            if(!request[key]) {
+              request[key] = null;
+              return Promise.resolve();
+            }
             request[key].reservedId = result[key+'Id'];
             return applyInTable(request[key], table[key].tableName).then(objects => {
-              if(objects.length===0) {
+              if(objects.length===0 && request[key].required) {
                 return Promise.reject({
                   name: NOT_FOUND,
                   message: `Nothing found with these constraints : ${tableName}->${key}->${JSON.stringify(request[key])}`,
@@ -421,7 +426,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
         function resolveChildrenArrays(results) {
           log('resolution part title', 'resolveChildrenArrays');
           //We keep only the arrays constraints that are truly constraints. Constraints that have keys other than 'add' or 'remove'.
-          const realArrays = arrays.filter(key => Object.keys(request[key]).find(k => !['add', 'remove'].includes(k)));
+          const realArrays = arrays.filter(key => request[key] && Object.keys(request[key]).find(k => !['add', 'remove'].includes(k)));
           return sequence(results.map(result =>
             () => sequence(realArrays.map(key =>
             //We look for all objects associated to the result in the association table

@@ -318,7 +318,7 @@ function logResponse(response) {
   return response;
 }
 function logError(response) {
-  log('test error response', response.message, util.inspect(response.response.data, false, null, true), '\n');
+  log('test error response', response.message, util.inspect(response.response && response.response.data, false, null, true), '\n');
   return response;
 }
 function shouldFail(response) {
@@ -328,7 +328,7 @@ function shouldFail(response) {
 }
 function shouldSucceed(response) {
   console.error('The previous request failed whereas it should have succeeded');
-  log('test error response', response.message, util.inspect(response.response.data, false, null, true), '\n');
+  log('test error response', response.message, util.inspect(response.response && response.response.data, false, null, true), '\n');
   process.exit();
 }
 function positiveTest(name, query) {
