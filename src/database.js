@@ -57,7 +57,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
       .then(() => resolve(request, local))
       .then(results =>
         //We let the plugins know that the request will be committed and terminate successfully
-        sequence(plugins.filter(plugin => plugin.onSuccess).map(plugin => plugin.onSuccess(results, { request, query, local, isAdmin: local.authId === privateKey })))
+        sequence(plugins.map(plugin => plugin.onSuccess).filter(s => s).map(onSuccess => () => onSuccess(results, { request, query, local, isAdmin: local.authId === privateKey })))
         //We terminate the request and commit all the changes made to the database
           .then(() => driver.commit().then(() => inTransaction = false).then(() => results))
       )
@@ -66,7 +66,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
         //We terminate the request and rollback all the changes made to the database
         driver.rollback().then(() => inTransaction = false)
         //We let the plugins know that the request failed and the changes will be discarded
-          .then(() => sequence(plugins.filter(plugin => plugin.onError).map(plugin => plugin.onError(err, { request, query, local, isAdmin: local.authId === privateKey }))))
+          .then(() => sequence(plugins.map(plugin => plugin.onError).filter(e => e).map(onError => () => onError(err, { request, query, local, isAdmin: local.authId === privateKey }))))
         //If the plugins didn't generate a new error, we throw the original error event.
           .then(() => Promise.reject(err))
       );

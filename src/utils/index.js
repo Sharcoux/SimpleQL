@@ -25,6 +25,8 @@ function stringify(data) {
 /** Resolve each promise sequentially. */
 function sequence(funcs) {
   const L = [];
+  const notFunction = funcs.find(f => !(f instanceof Function));
+  if(notFunction) return Promise.reject(`sequence must receive an array of functions that return a promise, but received ${typeof notFunction} instead.`);
   return funcs.reduce((chaine, func) => chaine.then(func).then(result => L.push(result)), Promise.resolve()).then(() => L);
 }
 
