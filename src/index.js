@@ -7,6 +7,7 @@ const bodyParser = require('body-parser');
 const log = require('./utils/logger');
 const plugins = require('./plugins');
 const { stringify } = require('./utils');
+const RateLimit = require('express-rate-limit');
 
 const dbQuery = {};
 const dbQueryStack = {};
@@ -20,10 +21,10 @@ module.exports = {
   getQuery,
 };
 
-function createServer({tables = {}, database = {}, rules = {}, plugins = [], middlewares = [], root = '/', errorHandler, app}) {
+function createServer({tables = {}, database = {}, rules = {}, plugins = [], middlewares = [], app}, { root = '/', sizeLimit = '5mb', requestPerMinute = 1000 } = {}) {
   const allMiddlewares = plugins.map(plugin => plugin.middleware).filter(mw => mw).concat(middlewares);
   const errorHandlers = plugins.map(plugin => plugin.errorHandler).filter(mw => mw);
-  errorHandlers.push(errorHandler || defaultErrorHandler);
+  errorHandlers.push(defaultErrorHandler);
   if(!app || !app.use || !app.all) return Promise.reject('app parameter is required and should be an express app created with express().');
   if(!(Object(root) instanceof String)) return Promise.reject('root parameter must be of type string and should denote the path to listen to');
   if(!root.startsWith('/')) return Promise.reject('root parameter should start with \'/\' and denote the path SimplQL server should listen to');
@@ -35,6 +36,7 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
     dbQuery[databaseName] = new Promise((resolve, reject) => {dbReady = resolve;dbReject = reject;});
     dbQueryStack[databaseName] = dbQuery[databaseName];//This promise is resolved each time the db is available for requests
   }
+
   //Check data
   return checkParameters({tables, database, rules, plugins})
     //Create the database
@@ -42,15 +44,23 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
     .then(requestHandler => {
       log('info', `${databaseName} database ready to be used!`);
       // parse application/x-www-form-urlencoded
-      app.use(root, bodyParser.urlencoded({ extended: false }));
+      app.use(root, bodyParser.urlencoded({ extended: false, limit: '1mb' }));
       // parse application/json
-      app.use(root, bodyParser.json());
+      app.use(root, bodyParser.json({ limit: sizeLimit }));
+      //Limit amount of requests handled
+      if(requestPerMinute) {
+        const apiLimiter = new RateLimit({
+          windowMs: 60*1000, // 1 minute
+          max: requestPerMinute,
+        });
+        app.use(root, apiLimiter);
+      }
       //Add the middlewares
-      allMiddlewares.forEach(m => app.use(m));
+      allMiddlewares.forEach(m => app.use(root, m));
       //Listen to simple QL requests
       app.all(root, simpleQL(requestHandler));
       //Add error handlers
-      errorHandlers.forEach(h => app.use(h));
+      errorHandlers.forEach(h => app.use(root, h));
       //Final error handler, ditching error
       app.use(root, (err, req, res, next) => next());
       log('info', 'Simple QL server ready!');

@@ -6,17 +6,9 @@ const { getOptionalDep } = require('../utils');
 
 const createSecurityPlugin = config => {
   check(securityModel, config);
-  const {app, domains, webmaster, requestPerMinute, helmet : helmetConfig } = config;
-  const RateLimit = getOptionalDep('express-rate-limit', 'SecurityPlugin');
-  const cm = getOptionalDep('compose-middleware', 'SecurityPlugin');
+  const {app, domains, webmaster, helmet : helmetConfig } = config;
   const helmet = getOptionalDep('helmet', 'SecurityPlugin');
   const greenlock = getOptionalDep('greenlock-express', 'SecurityPlugin');
-    
-  /** Limit the amount of request the server should handle per minute */
-  const apiLimiter = new RateLimit({
-    windowMs: 60*1000, // 1 minute
-    max: requestPerMinute || 1000,
-  });
   
   /** Redirects all requests to https */
   function requireHTTPS(req, res, next) {//eslint-disable-line no-unused-vars
@@ -25,8 +17,6 @@ const createSecurityPlugin = config => {
     }
     next();
   }
-  
-  app.disable('x-powered-by');
 
   log('warning', 'NOTICE:\nDo not call app.listen() when using the securityPlugin.\nPorts will be 80 and 443 and this cannot be changed. Run `sudo setcap \'cap_net_bind_service=+ep\' $(which node)` in order to use these ports without root access.');
   greenlock.init(() => {
@@ -60,7 +50,7 @@ const createSecurityPlugin = config => {
     };
   }).ready(glx => glx.serveApp(app));
   return {
-    middleware: requestPerMinute ? cm.compose([apiLimiter, helmet(helmetConfig)]) : helmet(helmetConfig)
+    middleware: helmet(helmetConfig)
   };
 };
 

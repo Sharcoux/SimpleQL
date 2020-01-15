@@ -58,16 +58,18 @@ const root = '/';//This is the path the SimpleQL requests should be addressed to
 createServer({app, tables, database, rules, plugins, root});
 ```
 
-**Note:** You can also add a list of *express* **middlewares** and an **error handler** directly as parameter of the `createServer` function:
+**Note:** You can also add options like the `root` path of the api, the `sizeLimit` of acceptable requests, or the number of `requestPerMinute` the api should handle, as parameter of the `createServer` function:
 
 ```javascript
-const middleware = (req, res, next) => next();
-const middlewares = [middleware];
-const errorHandler = (err, req, res, next) => next(err);
-createServer({app, tables, database, rules, plugins, middlewares, errorHandler});
+createServer({app, tables, database, rules, plugins}, {sizeLimit: '50mb', requestPerMinute: 100, root: '/'});
 ```
 
-**Example:** [You can find here a full example of a messenger-like SimpleQL server configuration](https://github.com/Sharcoux/SimpleQL/blob/master/example.js)
+Read more about the [optionnal parameter](docs/options.md).
+
+
+### Examples
+ * You can find [here](example.js) a full example of a messenger-like SimpleQL server configuration
+ * You can find [here](https://gitlab.com/Sharcoux/file-storage) a complete backend to host user files and manage data limitation.
 
 This is what a SimpleQL request will look like:
 
@@ -113,3 +115,4 @@ In one request, we are getting all the messages from `user2@email.com` published
 ### [Setting access rights](docs/access.md)
 ### [Adding plugins](docs/plugins.md)
 ### [Requesting your database](docs/requests.md)
+### [Server options](docs/options.md)

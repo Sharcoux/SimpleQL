@@ -8,16 +8,15 @@ We provide the following plugins. More are coming!
 1. [Login Plugin](plugins/login.md)
 2. [Security Plugin](plugins/security.md)
 
-## Express middleware and error handler
+## Express middleware
 
-As a matter of facts, you can also provide [express middleware](https://expressjs.com/en/guide/using-middleware.html) and an [error handler](https://expressjs.com/en/guide/error-handling.html) directly when creating the server. They will be merged with the plugins middlewares.
+As a matter of facts, you can also provide a list of [express middleware](https://expressjs.com/en/guide/using-middleware.html) directly when creating the server. They will be merged with the plugins middlewares.
 
 ```javascript
 const app = express();
 const middleware = (req, res, next) => next();
 const middlewares = [middleware];
-const errorHandler = (err, req, res, next) => next(err);
-createServer({app, tables, database, rules, plugins, middlewares, errorHandler});
+createServer({app, tables, database, rules, plugins, middlewares});
 ```
 
 ## Create your own plugin
