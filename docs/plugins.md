@@ -71,7 +71,7 @@ const onProcessing = {
 
 ### onCreation
 
-This is an object describing all the functions that should be called when an object is created inside any table. It will receive the [onEvent parameters](#onevent-parameters) as second parameter.
+This is an object describing all the functions that should be called when an object is created inside any table. It will receive the newly created object, and [onEvent parameters](#onevent-parameters) as second parameter.
 
 ```javascript
 const onCreation = {
@@ -81,7 +81,7 @@ const onCreation = {
 
 ### onDeletion
 
-This is an object describing all the functions that should be called when an object is deleted from any table. It will receive the [onEvent parameters](#onevent-parameters) as second parameter.
+This is an object describing all the functions that should be called when an object is deleted from any table. It will receive the list of deleted objects and [onEvent parameters](#onevent-parameters) as second parameter.
 
 ```javascript
 const onDeletion = {
@@ -91,7 +91,7 @@ const onDeletion = {
 
 ### onResult
 
-This is an object describing all the functions that should be called when a request has been fully executed in any table. It will receive the [onEvent parameters](#onevent-parameters) as second parameter.
+This is an object describing all the functions that should be called when a request has been fully executed in any table. It will receive the list of results matching the request, and [onEvent parameters](#onevent-parameters) as second parameter.
 
 ```javascript
 const onResult = {

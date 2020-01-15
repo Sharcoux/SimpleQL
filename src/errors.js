@@ -1,4 +1,5 @@
 module.exports = {
+  REQUIRED : 'required',
   NOT_SETTABLE : 'notSettable',
   NOT_UNIQUE : 'notUnique',
   NOT_FOUND : 'notFound',

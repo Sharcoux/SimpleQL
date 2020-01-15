@@ -1,11 +1,12 @@
 const createDatabase = require('./database');
 const errors = require('./errors');
-const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, DATABASE_ERROR, FORBIDDEN, UNAUTHORIZED, WRONG_PASSWORD, ACCESS_DENIED, CONFLICT } = errors;
+const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, DATABASE_ERROR, FORBIDDEN, UNAUTHORIZED, WRONG_PASSWORD, ACCESS_DENIED, CONFLICT, REQUIRED } = errors;
 const checkParameters = require('./checks');
 const accessControl = require('./accessControl');
 const bodyParser = require('body-parser');
 const log = require('./utils/logger');
 const plugins = require('./plugins');
+const { stringify } = require('./utils');
 
 const dbQuery = {};
 const dbQueryStack = {};
@@ -88,6 +89,7 @@ function defaultErrorHandler(err, req, res, next) {//eslint-disable-line no-unus
     switch(err.name) {
       case NOT_SETTABLE:
       case NOT_UNIQUE:
+      case REQUIRED:
       case BAD_REQUEST:
         res.writeHead(400);
         res.end(err.message);
@@ -117,7 +119,7 @@ function defaultErrorHandler(err, req, res, next) {//eslint-disable-line no-unus
       default:
         res.writeHead(500);
         console.error(err);
-        res.end(err);
+        res.end(err.message || stringify(err));
         break;
     }
   }

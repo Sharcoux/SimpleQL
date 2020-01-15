@@ -1,5 +1,5 @@
 /** This file contains the Driver that will convert SimpleQL requests into MySQL queries **/
-const { WRONG_VALUE, CONFLICT } = require('../errors');
+const { WRONG_VALUE, CONFLICT, REQUIRED } = require('../errors');
 
 const mysql = {};
 try {
@@ -249,6 +249,7 @@ function errorHandler(table) {
     if(error.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' && error.sqlMessage.includes('Access denied'))
       return Promise.reject({name: WRONG_VALUE, message: 'You are not allowed to access some data needed for your request.'});
     else if(error.code === 'ER_DUP_ENTRY') return Promise.reject({name: CONFLICT, message: error.sqlMessage.replace(`I_${table}_`, '') });
+    else if(error.code === 'ER_NO_DEFAULT_FOR_FIELD') return Promise.reject({name: REQUIRED, message: `${error.sqlMessage}, was not specified in the request, and is required in table ${table}.`});
     else {
       console.error(error);
       return Promise.reject({name: error.code, message: error.sqlMessage});
