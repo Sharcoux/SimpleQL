@@ -16,21 +16,15 @@ You need to provide the database information needed to establish a connexion to 
 };
 ```
 
-### types
+These are the database configuration fields:
 
-Currently, only **mysql** is available.
+ * **types**: Currently, only **mysql** is available. **If you want to use SompleQL with another database, please open an issue or a PR.**
+ * **privateKey**: This should be consider as an administrator password. Requests using thins key will be granted all access and access control rules will be ignored (see setting access rights).
+ * **create**: Right now, when you want to create the database the first time, you need to set `create` to `true`. Once your database is created, you will need to remove the `create` option. This will be improved in the future.
 
-### privateKey
+You can also add other options. They will be transfered to the database driver.
 
-This should be consider as an administrator password. Requests using thins key will be granted all access and access control rules will be ignored (see setting access rights).
-
-### create
-
-Right now, when you want to create the database the first time, you need to set `create` to `true`. Once your database is created, you will need to remove the `create` option. This will be improved in the future.
-
-### Others
-
-You can set various options. For **mysql**, you can find the list [here](https://github.com/mysqljs/mysql#connection-options)
+ * For **mysql** driver, you can find the list [here](https://github.com/mysqljs/mysql#connection-options)
 
 ## Make server-side requests to the database
 

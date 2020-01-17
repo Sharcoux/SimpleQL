@@ -12,7 +12,7 @@ The login plugin takes an object parameter containing 5 properties:
     * **google** : the name of the property to look for the google access token.
     * **facebook** : the name of the property to look for the facebook access token.
 
-**Example**
+## Usage example
 
 ```javascript
 const { login : { loginPlugin } } = require('simple-ql');
@@ -25,6 +25,29 @@ const plugins = [
   }),
 ];
 ```
+
+## Sign in
+
+Sign in is done like this:
+
+## Login
+
+```javascript
+const request = {
+  User : {
+    email : 'myLogin',
+    password : 'myPassword',
+    ...
+    //Other user data if any
+    ...
+    create: true,
+  }
+}
+```
+
+**Note:** The password will be hashed (and salted if the column was provided) before being set into the database.
+
+### Login / Password authentication
 
 To log into a table, just send the following request:
 
@@ -48,7 +71,7 @@ You will receive a SimpleQL response of this type
 }
 ```
 
-#### Google and Facebook authentication
+### Google and Facebook authentication
 
 This is how you can enable Google and Facebook authentication:
 

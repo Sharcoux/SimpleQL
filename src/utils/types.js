@@ -47,9 +47,50 @@ const security = {
   strict: true,
 };
 
+const stripe = {
+  app: 'function',
+  secretKey: 'string',
+  webhookURL: 'string',
+  decimal: 'boolean',
+  VAT: {
+    country: 'string',
+    percentage: 'number',
+    required: ['country', 'percentage'],
+    strict: true,
+  },
+  defaultCurrency: 'string',
+  productsTable: 'string',
+  plansTable: 'string',
+  subscriptionsTable: 'string',
+  customersTable: 'string',
+  paymentMethodsTable: 'string',
+  paymentsTable: 'string',
+
+  productName: 'string',
+  amount: 'string',
+  currency: 'string',
+  interval: 'string',
+  intervalCount: 'string',
+  trialPeriod: 'string',
+  product: 'string',
+  customer: 'string',
+  subscriptionItems: 'string',
+  paymentMethod: 'string',
+  expMonth: 'string',
+  expYear: 'string',
+  cardNumber: 'string',
+  cardCVC: 'string',
+  iban: 'string',
+  idealBank: 'string',
+  paymentType: 'string',
+  required: ['app', 'secretKey', 'webhookURL', 'planTable', 'subscrptionTable', 'userTable'],
+  strict: true,
+};
+
 module.exports = {
   dbColumn,
   database,
   login,
   security,
+  stripe,
 };

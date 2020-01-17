@@ -7,6 +7,7 @@ To handle server-side logic and custom behaviours, you can add plugins that we p
 We provide the following plugins. More are coming!
 1. [Login Plugin](plugins/login.md)
 2. [Security Plugin](plugins/security.md)
+3. [Stripe Plugin](plugins/stripe.md)
 
 ## Express middleware
 
