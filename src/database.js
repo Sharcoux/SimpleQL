@@ -1,6 +1,6 @@
 /** This is the core of SimpleQL where every request is cut in pieces and transformed into a query to the database */
 const readline = require('readline');
-const { isPrimitive, classifyRequestData, operators, sequence } = require('./utils');
+const { isPrimitive, toType, classifyRequestData, operators, sequence, stringify } = require('./utils');
 const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, DATABASE_ERROR, WRONG_VALUE, CONFLICT } = require('./errors');
 const { prepareTables, prepareRules } = require('./prepare');
 const log = require('./utils/logger');
@@ -201,7 +201,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
         });
 
         function integrityCheck() {
-        //If this request is authenticated with the privateKey, we don't need to check integrity.
+          //If this request is authenticated with the privateKey, we don't need to check integrity.
           if(local.authId === privateKey) return Promise.resolve();
 
           log('resolution part title', 'integrityCheck');
@@ -211,67 +211,100 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
             /** Check if the value is acceptable for a primitive */
             function isValue(value, key) {
-              if(value===null) return Promise.resolve();
-              if(isPrimitive(value)) return Promise.resolve();
+              if(value===null) return true;
+              if(isPrimitive(value)) return true;
               //This is the way to represent OR condition
-              if(Array.isArray(value)) return Promise.all(value.map(v => isValue(v, key)));
+              if(Array.isArray(value)) return value.every(v => isValue(v, key));
               //This is the way to create a AND condition
-              if(value instanceof Object) return Promise.all(Object.keys(value).map(k => operators.includes(k) && isValue(value[k], key)));
-              return Promise.reject({
-                name : BAD_REQUEST,
-                message : `Bad value ${value} provided for field ${key} in table ${tableName}. We expect null, a ${tablesModel[key]}, an object, or an array of these types.`
-              });
+              if(value instanceof Object) return Object.keys(value).every(k => operators.includes(k) && isValue(value[k], key));
+              throw `Bad value ${value} provided for field ${key} in table ${tableName}. We expect null, a ${tablesModel[key].type}, an object, or an array of these types.`;
             }
 
             /** Check if the value is acceptable for an object or an array */
             function isObject(value, key) {
-              if(value!==null && isPrimitive(value)) return Promise.reject({
-                name : BAD_REQUEST,
-                message : `Bad value ${value} provided for field ${key} in table ${tableName}. We expect null, an object, or an array of these types.`
-              });
+              if(value!==null && isPrimitive(value)) throw `Bad value ${value} provided for field ${key} in table ${tableName}. We expect null, an object, or an array of these types.`;
             }
 
             //Check if the values are acceptable for primitives, objects and arrays
-            return Promise.all(primitives.map(key => isValue(req[key], key)))
-              .then(() => Promise.all([...objects, ...arrays].map(key => isObject(req[key], key))));
+            return primitives.every(key => isValue(req[key], key))
+              && [...objects, ...arrays].every(key => isObject(req[key], key));
+          }
+          function wrongType(keys, values, model) {
+            return keys.find(key => !isTypeCorrect(key, values[key], model[key].type));
+            function isTypeCorrect(key, value, type) {
+              if(value===undefined || value===null) return !model[key].notNull;
+              switch(type) {
+                case 'string':
+                case 'varchar':
+                case 'text':
+                  return Object(value) instanceof String;
+                case 'char':
+                  return (Object(value) instanceof String) && value.length===1;
+                case 'integer':
+                case 'year': 
+                  return Number.isInteger(value);
+                case 'double':
+                case 'decimal':
+                case 'float':
+                  return !Number.isNaN(value);
+                case 'date':
+                case 'dateTime':
+                  return (Object(value) instanceof Date) || !isNaN(Date.parse(value));
+                case 'boolean':
+                  return Object(value) instanceof Boolean;
+                case 'binary':
+                case 'varbinary':
+                  return value instanceof Buffer;
+                case 'json':
+                default:
+                  return value instanceof Object;
+              }
+            }
           }
 
-
-          return checkEntry(request, primitives, objects, arrays)
-            .then(() => {
+          try {
+            checkEntry(request, primitives, objects, arrays);
             //Only one instructions among create, delete, get in each request
-              if(request.create && request.delete) return Promise.reject(`Each request can contain only one among 'create' or 'delete'. The request was : ${JSON.stringify(request)}.`);
-              //Check that set instruction is acceptable
-              if(request.set) {
-                if(Array.isArray(request.set) || !(request instanceof Object)) return Promise.reject(`The 'set' instruction ${JSON.stringify(request.set)} provided in table ${tableName} is not a plain object. A plain object is required for 'set' instructions.`);
-                const { primitives : setPrimitives, objects : setObjects, arrays : setArrays } = classifyRequestData(request.set, table);
-                return checkEntry(request.set, setPrimitives, setObjects, setArrays);
-              }
-              //Check that there is not add or remove instruction in object fields
-              const unwantedInstruction = objects.find(key => request[key].add || request[key].remove);
-              if(unwantedInstruction) return Promise.reject(`Do not use 'add' or 'remove' instructions within ${unwantedInstruction} parameter in table ${tableName}. You should use the 'set' instruction instead.`);
-              //Cannot add or remove elements from arrays in create or delete requests
-              if(request.create || request.delete) {
-                const addOrRemove = arrays.find(key => request[key].add || request[key].remove);
-                if(addOrRemove) return Promise.reject(
-                  request.create ? `In create requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. To add children, just write the constraints directly under ${addOrRemove}.`
-                    : `In delete requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. When deleting an object, the associations with this object will be automatically removed.`
-                );
-              }
-              //Check limit, offset and order instructions
-              if(request.limit && !Number.isInteger(request.limit)) return Promise.reject(`'Limit' statements requires an integer within ${tableName}. We received: ${request.limit} instead.`);
-              if(request.offset && !Number.isInteger(request.offset)) return Promise.reject(`'Offset' statements requires an integer within ${tableName}. We received: ${request.offset} instead.`);
-              if(request.order) {
-                //Ensure that order is an array of strings
-                if(!Array.isArray(request.order)) return Promise.reject(`'order' statements requires an array of column names within ${tableName} request. We received: ${request.order} instead.`);
-                //Ensure that it denotes only existing columns
-                const columns = Object.keys(tablesModel[tableName]);
-                const unfoundColumn = request.order.find(column =>
-                  column.startsWith('-') ? !columns.includes(column.substring(1)) : !columns.includes(column)
-                );
-                if(unfoundColumn) return Promise.reject(`'order' statement requires an array of property names within ${tableName}, but ${unfoundColumn} doesn't belong to this table.`);
-              }
-            }).catch(err => Promise.reject({ name: BAD_REQUEST, message: err }));
+            if(request.create && request.delete) throw `Each request can contain only one among 'create' or 'delete'. The request was : ${JSON.stringify(request)}.`;
+            //Check that set instruction is acceptable
+            if(request.set) {
+              if(Array.isArray(request.set) || !(request instanceof Object)) throw `The 'set' instruction ${JSON.stringify(request.set)} provided in table ${tableName} is not a plain object. A plain object is required for 'set' instructions.`;
+              const { primitives : setPrimitives, objects : setObjects, arrays : setArrays } = classifyRequestData(request.set, table);
+              checkEntry(request.set, setPrimitives, setObjects, setArrays);
+              const wrongKey = wrongType(setPrimitives, request.set, tablesModel[tableName]);
+              if(wrongKey) throw `The value ${stringify(request.set[wrongKey])} for ${wrongKey} in table ${tableName} is of type ${toType(request.set[wrongKey])} but it was expected to be of type ${tablesModel[tableName][wrongKey].type}.`;
+            }
+            //Check that create instruction is acceptable
+            if(request.create) {
+              const wrongKey = wrongType(primitives, request, tablesModel[tableName]);
+              if(wrongKey) throw `The value ${stringify(request[wrongKey])} for ${wrongKey} in table ${tableName} is of type ${toType(request[wrongKey])} but it was expected to be of type ${tablesModel[tableName][wrongKey].type}.`;
+            }
+            //Check that there is not add or remove instruction in object fields
+            const unwantedInstruction = objects.find(key => request[key].add || request[key].remove);
+            if(unwantedInstruction) throw `Do not use 'add' or 'remove' instructions within ${unwantedInstruction} parameter in table ${tableName}. You should use the 'set' instruction instead.`;
+            //Cannot add or remove elements from arrays in create or delete requests
+            if(request.create || request.delete) {
+              const addOrRemove = arrays.find(key => request[key].add || request[key].remove);
+              if(addOrRemove) throw request.create ? `In create requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. To add children, just write the constraints directly under ${addOrRemove}.`
+                : `In delete requests, you cannot have 'add' or 'remove' instructions in ${addOrRemove} in table ${tableName}. When deleting an object, the associations with this object will be automatically removed.`;
+            }
+            //Check limit, offset and order instructions
+            if(request.limit && !Number.isInteger(request.limit)) throw `'Limit' statements requires an integer within ${tableName}. We received: ${request.limit} instead.`;
+            if(request.offset && !Number.isInteger(request.offset)) throw `'Offset' statements requires an integer within ${tableName}. We received: ${request.offset} instead.`;
+            if(request.order) {
+            //Ensure that order is an array of strings
+              if(!Array.isArray(request.order)) throw `'order' statements requires an array of column names within ${tableName} request. We received: ${request.order} instead.`;
+              //Ensure that it denotes only existing columns
+              const columns = Object.keys(tablesModel[tableName]);
+              const unfoundColumn = request.order.find(column =>
+                column.startsWith('-') ? !columns.includes(column.substring(1)) : !columns.includes(column)
+              );
+              if(unfoundColumn) throw `'order' statement requires an array of property names within ${tableName}, but ${unfoundColumn} doesn't belong to this table.`;
+            }
+            return Promise.resolve();
+          } catch(err) {
+            return Promise.reject({ name: BAD_REQUEST, message: err });
+          }
         }
 
         /** We look for objects that match the request constraints and store their id into the key+Id property and add the objects into this.resolvedObjects map */
@@ -325,6 +358,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
               name : BAD_REQUEST,
               message : `It is not allowed to provide an array for key ${array} in table ${tableName} during creation.`,
             });
+
             //Add primitives values to be created
             primitives.forEach(key => element[key] = request[key]);
             //Link the object found to the new element if an object was found
@@ -475,10 +509,10 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           //Mark the elements as being edited
           results.forEach(result => result.edited = true);
           //Update the results with primitives values
-          primitivesSet.forEach(key => results.forEach(result => {
-            result[key] = request.set[key];
+          primitivesSet.forEach(key => {
+            results.forEach(result => result[key] = request.set[key]);
             values[key] = request.set[key];
-          }));
+          });
           //Cache the updated results
           results.forEach(addCache);
           //Find the objects matching the constraints to be replaced
@@ -692,7 +726,7 @@ function createTables({driver, tables, create}) {
     delete data[tableName].index;
     return driver.createTable({table: tableName, data: data[tableName], index});
   })).then(() => driver.createForeignKeys(foreignKeys)).then(() => data);
-  log('info', '\x1b[202m%s\x1b[0m', 'The "create" property was not set in the "database" object. Skipping tables creation.');
+  log('info', 'The "create" property was not set in the "database" object. Skipping tables creation.');
   return Promise.resolve(data);
 }
 

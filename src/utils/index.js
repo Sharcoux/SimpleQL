@@ -1,7 +1,13 @@
 const { BAD_REQUEST } = require('../errors');
 
+/** Check if a value is a primitive, like a string, a boolean, or a number. */
 function isPrimitive(value) {
   return value!==undefined && value!==Object(value);
+}
+
+/** Returns the type of an object */
+function toType(obj) {
+  return ({}).toString.call(obj).match(/\s([a-zA-Z]+)/)[1].toLowerCase();
 }
 
 /** Returns the intersection between array1 and array2 */
@@ -26,7 +32,7 @@ function stringify(data) {
 function sequence(funcs) {
   const L = [];
   const notFunction = funcs.find(f => !(f instanceof Function));
-  if(notFunction) return Promise.reject(`sequence must receive an array of functions that return a promise, but received ${typeof notFunction} instead.`);
+  if(notFunction) return Promise.reject(`sequence must receive an array of functions that return a promise, but received ${toType(notFunction)} instead.`);
   return funcs.reduce((chaine, func) => chaine.then(func).then(result => L.push(result)), Promise.resolve()).then(() => L);
 }
 
@@ -118,6 +124,7 @@ const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', 
 
 module.exports = {
   isPrimitive,
+  toType,
   intersection,
   stringify,
   classifyData,

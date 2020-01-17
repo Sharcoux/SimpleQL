@@ -198,6 +198,40 @@ createTestServer()
       }
     }))
 
+  //Forbidden: Creating a message with no feed
+  .then(() => negativeTest('Forbidden: Creating a message with no feed',
+    {
+      Comment : {
+        create : true,
+        content : 'test',
+        title : 'Test',
+        author: {
+          email : 'user2@email.com',
+        }
+      }
+    }))
+
+  //Forbidden: Creating a bad formatted message 
+  .then(() => negativeTest('Forbidden: Creating a bad formatted message',
+    {
+      Feed : {
+        participants : [
+          { email : 'user1@email.com' },
+          { email : 'user2@email.com' },
+        ],
+        comments : {
+          add : {
+            create : true,
+            content : { title: 'test', content: 'content'},
+            title : 'Test',
+            author: {
+              email : 'user2@email.com',
+            }
+          }
+        }
+      }
+    }))
+
   //Editing all messages between 2 dates
   .then(() => positiveTest('Editing all messages between 2 dates',
     {

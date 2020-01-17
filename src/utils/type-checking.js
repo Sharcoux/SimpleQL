@@ -1,5 +1,5 @@
 /** Custom type checking system to detect any error coming from a user and provide the most possible accurate error message */
-const { stringify } = require('./');
+const { stringify, toType } = require('./');
 
 /** Check that the data matches the model */
 function checkType(model, data) {
@@ -51,7 +51,7 @@ function checkType(model, data) {
 }
 
 function getType(data) {
-  const type = typeof data;
+  const type = toType(data);
   switch(type) {
     case 'number': {
       if(Number.isInteger(data)) return 'integer';

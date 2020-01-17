@@ -1,7 +1,7 @@
 /** This file contains functions to check the validity of the parameters provided to simple-ql */
 const check = require('./utils/type-checking');
 const { dbColumn, database } = require('./utils/types');
-const { stringify, classifyData, reservedKeys } = require('./utils');
+const { stringify, classifyData, reservedKeys, toType } = require('./utils');
 
 /** Check that the tables that are going to be created are valid */
 function checkTables(tables) {
@@ -87,7 +87,7 @@ function checkTables(tables) {
         if(!Array.isArray(index.column) && !(Object(index.column) instanceof String)) return Promise.reject(`The column ${index.column} of an index entry from table ${tableName} must contains a String or an array of Strings.`);
         if(Array.isArray(index.column) && !index.column.every(c => Object(c) instanceof String)) return Promise.reject(`The column ${stringify(index.column)} of an index entry from table ${tableName} must contains a String or an array of Strings.`);
         //check length
-        if(index.length && isNaN(index.length)) return Promise.reject(`The length value ${index.length} in the index entry from table ${tableName} must be a number, but it was ${typeof index.length}.`);
+        if(index.length && isNaN(index.length)) return Promise.reject(`The length value ${index.length} in the index entry from table ${tableName} must be a number, but it was ${toType(index.length)}.`);
         //check type
         if(index.type && !indexTypes.includes(index.type)) return Promise.reject(`The type of an index must belong to ${indexTypes} in table ${tableName}. We received: ${index.type}.`);
       }));
