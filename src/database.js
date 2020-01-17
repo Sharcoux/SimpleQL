@@ -249,7 +249,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                   return !Number.isNaN(value);
                 case 'date':
                 case 'dateTime':
-                  return (Object(value) instanceof Date) || !isNaN(Date.parse(value));
+                  return (Object(value) instanceof Date) || !isNaN(new Date(value));
                 case 'boolean':
                   return Object(value) instanceof Boolean;
                 case 'binary':
@@ -399,10 +399,14 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           //Create the where clause
           const where = {};
           const searchKeys = [...search, ...objects.map(key => key+'Id')];
+          let impossible = false;
           primitives.map(key => {
-            where[key] = request[key];
+            //If we have an empty array as a constraint, it means that no value can satisfy the constraint
+            if(Array.isArray(request[key]) && !request[key].length) impossible = true;
+            where[key] = request[key];//We don't consider empty arrays as valid constraints
             if(!searchKeys.includes(key)) searchKeys.push(key);
           });
+          if(impossible) return Promise.resolve([]);
           //We try to read the data from the cache
           const cachedData = readCache(request, search);
           if(cachedData) return Promise.resolve([cachedData]);
@@ -487,6 +491,8 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
         function remove(results) {
           if(!request.delete) return Promise.resolve(results);
           log('resolution part title', 'delete');
+          //If there is no results, there is nothing to delete
+          if(!results.length) return Promise.resolve(results);
           //Look for matching objects
           return driver.delete({
             table : tableName,
