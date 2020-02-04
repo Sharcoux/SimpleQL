@@ -1,4 +1,4 @@
-## **WARNING :** This is still in development and not yet ready for production. Use at your own risks!
+## **WARNING:** This is still in development and not yet ready for production. Use at your own risks!
 
 # SimpleQL
 A node framework to manage your backend and your database with the least possible amount of code

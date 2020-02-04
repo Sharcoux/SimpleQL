@@ -132,8 +132,8 @@ createTestServer()
       }
     }))
 
-  //Forbidden : Adding a contact as contact
-  .then(() => negativeTest('Forbidden : Inviting a contact as a contact',
+  //Forbidden : Adding as a contact someone that didn't invite you nor accepted you as a contact
+  .then(() => negativeTest('Forbidden : Adding as a contact someone that didn\'t invite you nor accepted you as a contact',
     {
       User: {
         email : 'user1@email.com',
@@ -156,6 +156,17 @@ createTestServer()
 
   //Adding a user invited as contact
   .then(() => positiveTest('Adding a contact',
+    {
+      User: {
+        email : 'user2@email.com',
+        contacts : {
+          add : {email: 'user1@email.com'},
+        }
+      }
+    }))
+
+  //Forbidden : Adding a contact as a contact
+  .then(() => negativeTest('Forbidden : Adding a contact as a contact',
     {
       User: {
         email : 'user2@email.com',
@@ -307,6 +318,17 @@ createTestServer()
       }
     }))
 
+  //Replacing all contacts
+  .then(() => negativeTest('Replacing all contacts with bad formatted instruction',
+    {
+      User : {
+        email: 'user2@email.com',
+        set: {
+          contacts: 'id'
+        }
+      }
+    }))
+
   //Deleting user
   .then(() => positiveTest('Deleting our own data',
     {
@@ -356,12 +378,12 @@ function logError(response) {
   return response;
 }
 function shouldFail(response) {
-  console.error('The previous request succeeded whereas it should have failed');
+  log('error', 'The previous request succeeded whereas it should have failed');
   log('test response', util.inspect(response.data, false, null, true), '\n');
   process.exit();
 }
 function shouldSucceed(response) {
-  console.error('The previous request failed whereas it should have succeeded');
+  log('error', 'The previous request failed whereas it should have succeeded');
   log('test error response', response.message, util.inspect(response.response && response.response.data, false, null, true), '\n');
   process.exit();
 }

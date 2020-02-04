@@ -1,7 +1,7 @@
 /** This is the core of SimpleQL where every request is cut in pieces and transformed into a query to the database */
 const readline = require('readline');
-const { isPrimitive, toType, classifyRequestData, operators, sequence, stringify } = require('./utils');
-const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, DATABASE_ERROR, WRONG_VALUE, CONFLICT } = require('./errors');
+const { isPrimitive, toType, classifyRequestData, operators, sequence, stringify, filterObject } = require('./utils');
+const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, DATABASE_ERROR, WRONG_VALUE } = require('./errors');
 const { prepareTables, prepareRules } = require('./prepare');
 const log = require('./utils/logger');
 
@@ -398,6 +398,12 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           //Create the where clause
           const where = {};
           const searchKeys = [...search, ...objects.map(key => key+'Id')];
+          //We need to retrieve the current values
+          if(request.set) {
+            const { primitives : primitivesSet, objects : objectsSet } = classifyRequestData(request.set, table);
+            primitivesSet.forEach(key => {if(!searchKeys.includes(key)) searchKeys.push(key);});
+            objectsSet.forEach(key => {if(!searchKeys.includes(key+'Id')) searchKeys.push(key+'Id');});
+          }
           let impossible = false;
           primitives.map(key => {
             //If we have an empty array as a constraint, it means that no value can satisfy the constraint
@@ -510,7 +516,15 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           if(!results.length) return Promise.resolve(results);
           log('resolution part title', 'update');
           const { primitives : primitivesSet, objects : objectsSet, arrays : arraysSet } = classifyRequestData(request.set, table);
+          //If previous values where not converted into objects yet, we do it now.
+          objectsSet.forEach(key => results.forEach(result => result[key+'Id'] && (result[key] = { reservedId: result[key+'Id']}) && delete result[key+'id']));
+          //Read the current values before update
+          const currentValues = {};
+          const updatedKeys = [...primitivesSet, ...objectsSet];
+          results.forEach(result => currentValues[result.reservedId] = filterObject(result, updatedKeys));
           const values = {}; // The values to be edited
+          const removed = {};//The elements that have been removed
+          const added = {};//The elements that have been added
           //Mark the elements as being edited
           results.forEach(result => result.edited = true);
           //Update the results with primitives values
@@ -550,31 +564,40 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                 where : { reservedId : results.map(result => result.reservedId) },
               }) : Promise.resolve();
             })
+            .then(() => pluginCall({objects: results, oldValues: currentValues, newValues: results.length ? filterObject(results[0], updatedKeys): {}}, 'onUpdate'))
         
           //Replace arrays of elements by the provided values
-            .then(() => sequence(arraysSet.map(key => () => results.map(result =>
-            //Delete any previous value
-              driver.delete({table : `${key}${tableName}`, where : {
-                [tableName+'Id'] : result.reservedId,
-              }})
-              //Look for elements matching the provided constraints
-                .then(() => applyInTable(request.set[key], `${key}${tableName}`))
-              //Create the new links
-                .then(matches => driver.create({table : `${key}${tableName}`, elements : {
-                  [tableName+'Id'] : result.reservedId,
-                  [key+'Id'] : matches.map(match => match.reservedId),
-                }})
-                //Attach the matching elements to the results
-                  .then(() => result[key] = matches)
-                )
-            ))))
-          //We return the research results
+            .then(() => sequence(arraysSet.map(key => () =>
+              driver.get({table: `${key}${tableName}`, search: [key+'Id'], where: { [tableName+'Id']: results.map(r => r.reservedId) }})
+                .then(deleted => removed[key] = deleted.map(d => ({reservedId: d[key+'Id']})))
+                .then(() => 
+                  //Delete any previous value
+                  driver.delete({table : `${key}${tableName}`, where : {
+                    [tableName+'Id'] : results.map(r => r.reservedId),
+                  }})
+                    //Look for elements matching the provided constraints
+                    .then(() => applyInTable(request.set[key], `${key}${tableName}`))
+                    //Create the new links
+                    .then(matches => driver.create({table : `${key}${tableName}`, elements : {
+                      [tableName+'Id'] : results.map(r => r.reservedId),
+                      [key+'Id'] : matches.map(match => match.reservedId),
+                    }})
+                      //Attach the matching elements to the results
+                      .then(() => added[key] = matches)
+                      .then(() => results.forEach(result => result[key] = matches))
+                    )
+                ))))
+            //If we added or removed something, we call the plugins listeners
+            .then(() => pluginCall({objects: results, added, removed}, 'onListUpdate'))
+            //We return the research results
             .then(() => results);
         }
 
-
         function updateChildrenArrays(results) {
           log('resolution part title', 'updateChildrenArrays');
+          if(!results.length) return Promise.resolve(results);
+          const removed = {};
+          const added = {};
           return sequence(arrays.map(key => () => {
             const { add, remove } = request[key];
             return Promise.resolve()
@@ -588,9 +611,9 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                       [tableName+'Id'] : results.map(result => result.reservedId),
                       [key+'Id'] : arrayResults.map(result => result.reservedId),
                     }
-                  }));
+                  }).then(() => removed[key] = arrayResults));
               })
-            //We add elements into the association table
+              //We add elements into the association table
               .then(() => {
                 if(!add) return Promise.resolve();
                 //We look for the elements we want to add in the association table
@@ -598,14 +621,20 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                 //We link these elements to the results
                   .then(arrayResults => driver.create({
                     table : `${key}${tableName}`,
-                    //[].concat(...array) will flatten array.
-                    elements : [].concat(...results.map(result => arrayResults.map(arrayResult => ({
-                      [tableName+'Id'] : result.reservedId,
-                      [key+'Id'] : arrayResult.reservedId,
-                    })))),
-                  }).then(() => results.forEach(result => result[key] = arrayResults)));
+                    elements : {
+                      [tableName+'Id'] : results.map(result => result.reservedId),
+                      [key+'Id'] : arrayResults.map(result => result.reservedId),
+                    }
+                  })
+                    //Attach the matching elements to the results
+                    .then(() => added[key] = arrayResults)
+                    .then(() => results.forEach(result => result[key] = arrayResults))
+                  );
               });
-          })).then(() => results);
+          }))
+            //If we added or removed something, we call the plugins listeners
+            .then(() => pluginCall({objects: results, added, removed}, 'onListUpdate'))
+            .then(() => results);
         }
     
         function controlAccess(results) {
