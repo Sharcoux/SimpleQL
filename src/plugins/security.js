@@ -42,7 +42,7 @@ const createSecurityPlugin = config => {
   let configFile = { sites };
   if(configRawContent) {
     configFile = JSON.parse(configRawContent);
-    config.sites = sites.map(({subject, altNames}) => {
+    configFile.sites = sites.map(({subject, altNames}) => {
       const configSiteData = configFile.sites.find(site => site.subject===subject) || {};
       return {...configSiteData, subject, altNames};
     });
