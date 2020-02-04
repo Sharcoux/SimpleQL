@@ -25,8 +25,8 @@ const createSecurityPlugin = config => {
   const configDir = 'greenlock.d';
   fs.mkdirSync(path.normalize(path.join(packageRoot, configDir)), { recursive: true });
 
-  const subjects = domains.filter(domain => domain.split('\\.').length===2);
-  const others = domains.filter(domain => domain.split('\\.').length>2);
+  const subjects = domains.filter(domain => domain.split('.').length===2);
+  const others = domains.filter(domain => domain.split('.').length>2);
   const sites = subjects.map(domain => {
     const subDomains = others.filter(sub => sub.endsWith(domain));
     return {
@@ -39,16 +39,17 @@ const createSecurityPlugin = config => {
   const configRawContent = fs.readFileSync(path.normalize(path.join(packageRoot, configDir, 'config.json')));
 
   //Update sites with available data if exist
+  let configFile = { sites };
   if(configRawContent) {
-    const config = JSON.parse(configRawContent);
-    sites.map(({subject, altNames}) => {
-      const configSiteData = config.find(site => site.subject===subject) || {};
+    configFile = JSON.parse(configRawContent);
+    config.sites = sites.map(({subject, altNames}) => {
+      const configSiteData = configFile.sites.find(site => site.subject===subject) || {};
       return {...configSiteData, subject, altNames};
     });
   }
 
   //Write the updated file content
-  fs.writeFileSync(path.normalize(path.join(packageRoot, configDir, 'config.json')), JSON.stringify({ sites }, null, 4));
+  fs.writeFileSync(path.normalize(path.join(packageRoot, configDir, 'config.json')), JSON.stringify(configFile, null, 4));
 
   greenlock.init({
     packageRoot,
