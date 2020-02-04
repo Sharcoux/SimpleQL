@@ -66,7 +66,7 @@ You can provide a string containing the **data type** optionally followed by the
 
 If you need to provide more details, you can use an object to describe your data type. In this case, you can provide the following parameters:
 
- * **data type** (one of: string, integer, float, double, decimal, date, dateTime, boolean, text, binary)
+ * **type** (one of: string, integer, float, double, decimal, date, dateTime, boolean, text, binary)
  * **length** (in byte)
  * **unsigned** (boolean : default false)
  * **notNull** (boolean : default false)
@@ -86,6 +86,21 @@ If you need to provide more details, you can use an object to describe your data
       },
     }
 ```
+
+## notNull
+
+You can also require some fields to not accept `null` as a value by providing a field notNull with an array of columns names:
+
+```javascript
+    const Comment = {
+      content: 'text',
+      title: 'string/60',
+      author: User,
+      notNull: ['author', 'title']
+    }
+```
+
+Here, the fields `author` and `title` cannot be null.
 
 ## Indexes
 
@@ -147,6 +162,43 @@ You can generate an index over multiple columns. In this case, you must use the 
     }
 ```
 
+### Index on association tables, making associations unique
+
+Imagine the following table:
+
+```javascript
+    const User = {};
+    Object.assign(User, {
+        contacts : [User],
+    });
+```
+
+Contacts will be converted into an association table, and you can link new contacts with this kind of requests:
+
+```javascript
+{
+  User : {
+    contacts : {
+      add : [
+        { name : 'Jane Doe' },
+        { name : 'Mummy' },
+      ]
+    }
+  }
+}
+```
+
+If you want to ensure that a contact cannot be linked twice to the same User, you can add the table to the index list:
+
+```javascript
+    const User = {};
+    Object.assign(User, {
+        contacts : [User],
+        index: ['contacts/unique']//Or more implicitely : index: ['contacts'] (in this specific case it will be considered the same)
+    });
+```
+
+
 ## Self-references / Cross references between tables
 
 If you get the following message:
@@ -175,7 +227,7 @@ This might make it harder to read the interactions between tables and the comple
     Object.assign(User, {
         name : 'string/20',
         age : 'integer',
-        mentor : User;
-        contacts : [User];
+        mentor : User,
+        contacts : [User],
     });
 ```

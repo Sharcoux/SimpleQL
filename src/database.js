@@ -195,7 +195,6 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
               //If nothing matches the request, the result should be an empty array
               if(err.name===NOT_FOUND) return Promise.resolve([]);
               if(err.name===WRONG_VALUE) return Promise.reject({ name: ACCESS_DENIED, message: `You are not allowed to access some data needed for your request in table ${tableName}.`});
-              if(err.name===CONFLICT) return Promise.reject({ name: CONFLICT, message: `${err.message} in table ${tableName}.`});
               return Promise.reject(err);
             });
         });

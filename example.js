@@ -18,6 +18,7 @@ Object.assign(User, {
   salt: 'binary/16',
   contacts: [User],
   invited: [User],
+  notNull: ['pseudo', 'email', 'password', 'salt'],
   index: [
     //You can use the object form
     {
@@ -25,26 +26,26 @@ Object.assign(User, {
       type: 'unique',
     },
     //Or the short string form
-    'pseudo/8'
+    'pseudo/8',
+    'contacts/unique',
+    'invited/unique'
   ],
 });
 
 Object.assign(Comment, {
   content: 'text',
-  title: {
-    type : 'string',
-    length: 60,
-    notNull : true,
-  },
+  title: 'string/60',
   author: User,
   date: 'dateTime',
   lastModification: 'dateTime',
+  notNull: ['title', 'author'],
   index : ['date', 'content/fulltext'],
 });
 
 Object.assign(Feed, {
   participants: [User],
   comments: [Comment],
+  index: ['participants/unique', 'comments/unique']
 });
 
 /*************************************************************************
@@ -222,7 +223,7 @@ const customPlugin = {
           request.invited.add = invited;
         });
         let alreadyIn;
-        //If the user tries to add as contact someone that didn't invite them nor as them as contact, we deny the request
+        //If the user tries to add as contact someone that didn't invite them nor has them as contact, we deny the request
         if(alreadyIn = addContacts.find(contact => ![...contact.invited, ...contact.contacts].find(u => u.reservedId===userId))) return Promise.reject({ status: 401, message: `The User ${alreadyIn.reservedId} must invite User ${userId} before User ${userId} can add it as a contact.`});
         //If we try to invite a user already in our contacts or invited list, we deny the request
         else if(alreadyIn = invitedIds.find(id => allContactsIds.includes(id))) return Promise.reject({ status: 403, message: `The User ${alreadyIn} is already in the contacts of User ${userId}.`});

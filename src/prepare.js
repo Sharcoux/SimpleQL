@@ -42,6 +42,7 @@ function prepareTables(tables) {
 
     //Add the indexes
     if(table.index) acc[tableName].index = table.index;
+
     //Add primitives constraints
     primitives.forEach(key => {
       const data = table[key];
@@ -53,6 +54,7 @@ function prepareTables(tables) {
         acc[tableName][key] = data;
       }
     });
+
     //Transforme author = User into authorId = 'integer/10';
     objects.forEach(key => {
       acc[tableName][key+'Id'] = {
@@ -74,18 +76,19 @@ function prepareTables(tables) {
           if(index.column === key) throw new Error(`indexes on keys referencing foreign tables will be ignored, except for composite indexes. Please remove index ${key} from table ${tableName}.`);
         });
       }
+      //We need to change the notNull columns
+      if(table.notNull) {
+        table.notNull = table.notNull.map(column => column===key ? key+'Id' : column);
+      }
+      //We create the foreign key
       acc[tableName].foreignKeys = {
         [key+'Id'] : table[key].tableName,
       };
     });
+
     //Create an association table. contacts = [User] creates a map contactsUser = {userId : 'integer/10', contactsId : 'integer/10'}
     arrays.forEach(key => {
       const name = key+tableName;
-      const index = acc[tableName].index;
-      //Indexes on array
-      if(index && index.find(index => index.column === key || (Array.isArray(index.colum) && index.column.find(c => c===key)))) {
-        throw new Error(`indexes on keys referencing foreign tables will be ignored. Please remove index ${key} from table ${tableName}.`);
-      }
       acc[name] = {
         reservedId,
         [tableName+'Id'] : {
@@ -102,30 +105,38 @@ function prepareTables(tables) {
           [tableName+'Id'] : tableName,
           [key+'Id'] : table[key][0].tableName,
         },
-        //Association table entries are supposed to be unique
-        index: [
-          {
-            column: [key+'Id', tableName+'Id'],
-            type: 'unique',
-          }
-        ]
       };
-    });
-
-    if(table.index) table.index.forEach(elt => {
-      //Ensure that the column exists for the index
-      if(!elt.column) throw new Error(`An index entry doesn't precise any column to refer to in table ${tableName}.`);
-      const columns = Array.isArray(elt.column) ? elt.column : [elt.column];acc[tableName][elt.column];
-      const unfoundColumn = columns.find(column => column==='index' || !acc[tableName][column]);
-      if(unfoundColumn) throw new Error(`The index entry ${unfoundColumn} doesn't match any column in table ${tableName}.`);
-
-      //Check that the index length is not longer than the column length
-      if(elt.length && columns.every(column => acc[tableName][column].length)) {
-        //The sum of the lengths in case of composite indexes
-        const sum = columns.reduce((sum, column) => sum + acc[tableName][column].length, 0);
-        if(elt.length>sum) throw new Error(`The length for index ${elt.column} is larger than the length of the column specified in the table ${tableName}.`);
+      //arrays cannot be notNull
+      if(acc[tableName].notNull && acc[tableName].notNull.includes(key)) throw new Error(`fields denoting an association like ${key} cannot be notNull in table ${tableName}.`);
+      //Indexes on array
+      const index = acc[tableName].index;
+      //If the index denote the association table as being unique, we consider that the table cannot have duplicate entries.
+      if(index) {
+        if(Array.isArray(index.colum) && index.column.find(c => c===key)) {
+          throw new Error(`Multiple indexes cannot contain keys referencing association tables. Please remove ${key} from index ${index} in table ${tableName}.`);
+        } else {
+          const arrayIndex = index.find(index => index.column === key);
+          if(arrayIndex) {
+            if(arrayIndex.type && arrayIndex.type!=='unique') {
+              throw new Error(`Indexes on keys referencing association tables must be of type unique. Please set the type of ${key} in the index of table ${tableName} to 'unique', or remove the index.`);
+            } else {
+              //Association table entries are supposed to be unique
+              acc[name].index = [{
+                column: [key+'Id', tableName+'Id'],
+                type: 'unique',
+              }];
+              //We remove the index from the original table as it belongs to the association one
+              index.splice(index.indexOf(arrayIndex), 1);
+            }
+          }
+        }
       }
     });
+
+    //Set the notNull attribute for each column
+    if(table.notNull) {
+      table.notNull.forEach(column => acc[tableName][column].notNull = true);
+    }
 
     return acc;
   }, {});

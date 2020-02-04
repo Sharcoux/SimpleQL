@@ -80,7 +80,9 @@ class Driver {
     });
   }
   get({table, search, where, offset, limit, order}) {
-    if(!search.length) return Promise.resolve({});
+    if(!search.length) return Promise.resolve([]);
+    //If a condition specify that no value is accepted for a column, no result will match the constraint
+    if(Object.values(where).find(v => Array.isArray(v) && v.length===0)) return Promise.resolve([]);
     let query = this._createQuery(`SELECT ${search.map(s => ei(s)).join(', ')} FROM ${ei(table)}`, where, table);
     //order: ['name', '-age'] will sort by ascending name and descending age
     if(order) query += ` ORDER BY ${order.map(column => (column.startsWith('-') ? `${ei(column.substring(1))} DESC` : `${ei(column)} ASC`)).join(', ')}`;
@@ -92,6 +94,8 @@ class Driver {
     });
   }
   delete({table, where}) {
+    //If a condition specify that no value is accepted for a column, no result will match the constraint
+    if(Object.values(where).find(v => Array.isArray(v) && v.length===0)) return Promise.resolve([]);
     const query = this._createQuery(`DELETE FROM ${ei(table)}`, where, table);
     return this.query(query).catch(errorHandler(table));
   }
@@ -128,6 +132,8 @@ class Driver {
           : es(value);
   }
   update({table, values, where}) {
+    //If a condition specify that no value is accepted for a column, no result will match the constraint
+    if(Object.values(where).find(v => Array.isArray(v) && v.length===0)) return Promise.resolve([]);
     const setQuery = Object.keys(values).map(key => {
       const value = values[key];
       return `${ei(key)}=${this._escapeValue(table, key, value)}`;
@@ -248,7 +254,22 @@ function errorHandler(table) {
   return error => {
     if(error.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' && error.sqlMessage.includes('Access denied'))
       return Promise.reject({name: WRONG_VALUE, message: 'You are not allowed to access some data needed for your request.'});
-    else if(error.code === 'ER_DUP_ENTRY') return Promise.reject({name: CONFLICT, message: error.sqlMessage.replace(`I_${table}_`, '') });
+    else if(error.code === 'ER_DUP_ENTRY') {
+      const message = error.sqlMessage.replace(`I_${table}_`, '');
+      const [dup, ids, key, tables, rest] = message.split('\'');
+      const [property, tableName] = tables.split('_').map(name => name.replace('Id', ''));
+      console.log(['---------', dup, ids, key, tables, rest].join('\n'));
+      //Association
+      if(tableName) {
+        const [propertyId, id] = ids.split('-');
+        return Promise.reject({name: CONFLICT, message: `${dup}: ${tableName} ${id} received another occurence of ${property} ${propertyId}${key}${property} whereas the association was expected to be unique.` });
+      }
+      //Normal table
+      else {
+        const [tableName, propertyName] = property.split('.');
+        return Promise.reject({name: CONFLICT, message: `${dup}: Table ${tableName} received a second object with ${propertyName} ${ids} whereas it was expected to be unique.` });
+      }
+    }
     else if(error.code === 'ER_NO_DEFAULT_FOR_FIELD') return Promise.reject({name: REQUIRED, message: `${error.sqlMessage}, was not specified in the request, and is required in table ${table}.`});
     else {
       console.error(error);

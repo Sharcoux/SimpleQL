@@ -3,7 +3,7 @@ const categories = {
   // 'database query' : 'bold',
   // 'database result' : 'default',
   'test title' : 'cyan',
-  'test error title' : 'red',
+  'test error title' : 'lightRed',
   'test request' : 'default',
   'test response' : 'bold',
   'test error response' : 'bold',
@@ -11,6 +11,7 @@ const categories = {
   // 'resolution part title' : 'magenta',
   // 'access warning' : 'yellow',
   'info' : 'cyan',
+  'error': 'red',
   // 'login' : 'cyan',
 };
 

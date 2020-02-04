@@ -21,6 +21,15 @@ function any(funcs) {
   return reverse(sequence(funcs.map(func => () => reverse(func()))));
 }
 
+/** Filter an object to only the provided keys */
+function filterObject(object, keys) {
+  return Object.keys(object).reduce((res, key) => {
+    if(keys.includes(key)) res[key] = object[key];
+    return res;
+  }, {});
+}
+
+/** Stringify functions, arrays, object or other data */
 function stringify(data) {
   if(data instanceof Function) return data + '';
   else if(Array.isArray(data)) return '['+data.map(stringify).join(', ')+']';
@@ -109,17 +118,18 @@ function classifyRequestData(request, table) {
   return { request, search, primitives, objects, arrays };
 }
 
+/** Retrieve a dependency, or throw an error if the dependency is not installed */
 function getOptionalDep(dependency, requester) {
   try {
     const dep = require(dependency);
     return dep;
   } catch(err) {
     throw new Error(`You should add ${dependency} to your dependencies to use ${requester}. Run
-    npm i -D ${dependency}`);
+    npm i -S ${dependency}`);
   }
 }
 
-const reservedKeys = ['reservedId', 'set', 'get', 'created', 'deleted', 'edited', 'delete', 'create', 'add', 'remove', 'not', 'like', 'or', 'limit', 'order', 'offset', 'tableName', 'foreignKeys', 'type', 'parent', 'index', 'reserved', 'required'];
+const reservedKeys = ['reservedId', 'set', 'get', 'created', 'deleted', 'edited', 'delete', 'create', 'add', 'remove', 'not', 'like', 'or', 'limit', 'order', 'offset', 'tableName', 'foreignKeys', 'type', 'parent', 'index', 'notNull', 'reserved', 'required'];
 const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', '~', '!'];
 
 module.exports = {
@@ -127,6 +137,7 @@ module.exports = {
   toType,
   intersection,
   stringify,
+  filterObject,
   classifyData,
   classifyRequestData,
   reservedKeys,
