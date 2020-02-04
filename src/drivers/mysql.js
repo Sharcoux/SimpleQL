@@ -256,17 +256,16 @@ function errorHandler(table) {
       return Promise.reject({name: WRONG_VALUE, message: 'You are not allowed to access some data needed for your request.'});
     else if(error.code === 'ER_DUP_ENTRY') {
       const message = error.sqlMessage.replace(`I_${table}_`, '');
-      const [dup, ids, key, tables, rest] = message.split('\'');
-      const [property, tableName] = tables.split('_').map(name => name.replace('Id', ''));
-      console.log(['---------', dup, ids, key, tables, rest].join('\n'));
-      //Association
-      if(tableName) {
+      const [dup, ids, key, tables] = message.split('\'');
+      const [tableNames, property] = tables.split('_').map(name => name.replace('Id', ''));
+      const [tableName, propertyName] = tableNames.split('.');
+      //Array association
+      if(table===propertyName+property) {
         const [propertyId, id] = ids.split('-');
-        return Promise.reject({name: CONFLICT, message: `${dup}: ${tableName} ${id} received another occurence of ${property} ${propertyId}${key}${property} whereas the association was expected to be unique.` });
+        return Promise.reject({name: CONFLICT, message: `${dup}: Object ${id} received another occurence of ${property} ${propertyId}${key}${propertyName} whereas the association was expected to be unique.` });
       }
       //Normal table
       else {
-        const [tableName, propertyName] = property.split('.');
         return Promise.reject({name: CONFLICT, message: `${dup}: Table ${tableName} received a second object with ${propertyName} ${ids} whereas it was expected to be unique.` });
       }
     }

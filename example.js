@@ -228,7 +228,7 @@ const customPlugin = {
         //If we try to invite a user already in our contacts or invited list, we deny the request
         else if(alreadyIn = invitedIds.find(id => allContactsIds.includes(id))) return Promise.reject({ status: 403, message: `The User ${alreadyIn} is already in the contacts of User ${userId}.`});
         //If we try to add a contact which is already in our contacts list, we deny the request
-        else if(alreadyIn = contactsIds.find(id => userContactsIds.includes(id))) return Promise.reject({ status: 403, message: `The User ${alreadyIn} is already a contact of User ${userId}.`});
+        // else if(alreadyIn = contactsIds.find(id => userContactsIds.includes(id))) return Promise.reject({ status: 403, message: `The User ${alreadyIn} is already a contact of User ${userId}.`});
         //If we try to add as contact someone we already invited, we need to remove it from the invited list.
         const alreadyInvited = contactsIds.filter(id => userInvitedIds.includes(id));
         if(alreadyInvited.length>0) await query({ User: { reservedId: userId, invited: { remove: { reservedId: alreadyInvited } } }}, { admin: true });
