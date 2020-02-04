@@ -558,7 +558,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           ))
           //Reduce the request to only the primitives and objects ids constraints
             .then(() => {
-              return values.length ? driver.update({
+              return Object.keys(values).length ? driver.update({
                 table : tableName,
                 values,
                 where : { reservedId : results.map(result => result.reservedId) },
