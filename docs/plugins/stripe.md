@@ -1,21 +1,4 @@
-Product : the products you sell (name, active, type) https://stripe.com/docs/api/products/object
-
-Plans : the price, currency and interval a customer can subscribe to (amount_decimal, currency, interval, product) https://stripe.com/docs/api/plans
-
-Subscriptions: links a customer to a plan. (customer, items, trial_period_days) https://stripe.com/docs/api/subscriptions
-
-items: (plan, quantity)
-
-customers: (id, name, email, currency) https://stripe.com/docs/api/customers
-
-
-  const {app, secretKey, webhookURL, VAT, defaultCurrency
-    plansTable = 'Plans', subscriptionsTable = 'Subscriptions', customersTable = 'Customers', productsTable = 'Products', paymentsTable = 'Payments',
-    paymentMethodsTable = '', productName = 'name', amount = '', amountDecimal = '', currency = 'currency', interval = 'interval', intervalCount = 'intervalCount'
-    trialPeriod = '', product = 'product', customer = 'customer', subscriptionItems = 'items', paymentMethod='paymentMethod',
-    expMonth = 'expMonth', expYear = 'expYear', cardNumber = 'number', cardCVC = 'cvc', iban = '', idealBank = '', paymentType = '',
-    clientSecret = 'clientSecret'
-  } = config;
+# Stripe Plugin
 
 ## General configuration
 
@@ -32,12 +15,12 @@ To use the plugin, you will need to provide the following informations:
 
 To use this plugin, you need the following tables:
 
- * **Products** : Details about the [products](https://stripe.com/docs/api/products) you are selling
- * **Plans** : A table that will contains the [plans](https://stripe.com/docs/api/plans) for subscriptions
- * **Subscriptions** : A table containing details about [subscriptions](https://stripe.com/docs/api/subscriptions) of a customer, and the plans they subscribed to.
- * **Customers** : Details about your [customers](https://stripe.com/docs/api/customers).
- * **Payments** : Details about the [payments](https://stripe.com/docs/api/payments_intent) in progress.
- * **PaymentMethods** (*optional*) : If `storePaymentMethods` is set to `true`, this table will store the [payments methods](https://stripe.com/docs/api/payment_methods) of your customers, but this will requires you to validate [PCI compliance](https://stripe.com/docs/security#validating-pci-compliance).
+ * **Product** : Details about the [products](https://stripe.com/docs/api/products) you are selling
+ * **Plan** : A table that will contains the [plans](https://stripe.com/docs/api/plans) for subscriptions
+ * **Subscription** : A table containing details about [subscriptions](https://stripe.com/docs/api/subscriptions) of a customer, and the plans they subscribed to.
+ * **Customer** : Details about your [customers](https://stripe.com/docs/api/customers).
+ * **Payment** : Details about the [payments](https://stripe.com/docs/api/payments_intent) in progress.
+ * **PaymentMethod** (*optional*) : If `storePaymentMethods` is set to `true`, this table will store the [payments methods](https://stripe.com/docs/api/payment_methods) of your customers, but this will requires you to validate [PCI compliance](https://stripe.com/docs/security#validating-pci-compliance).
 
 To change the name of the tables, use the following config properties:
 
@@ -159,3 +142,19 @@ You can edit the column names with the following properties:
     cardCVC: '<Your column name>',
   });
 ```
+
+## Event listeners
+
+To react to Stripe [events](https://stripe.com/docs/api/events) through webhooks, you will need to pass the callbacks to the Stripe Plugin this way:
+
+```javascript
+  stripePlugin({
+    app, secretKey, webhookURL,//Required properties
+
+    listeners: {
+      "customer.created": event => console.log(`customer ${data.data.object.id} was created`),
+    }
+  });
+```
+
+Check the full [list](https://stripe.com/docs/api/events/types) of Stripe events.

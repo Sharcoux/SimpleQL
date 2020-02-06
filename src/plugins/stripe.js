@@ -13,11 +13,11 @@ const createStripePlugin = async config => {
   if(!updatingInterval) updatingInterval = setInterval(updateStripeIpList, 1000*3600*24);
   check(stripeModel, config, plansTable, subscriptionsTable, customersTable, productsTable);
   const {app, secretKey, webhookURL, defaultCurrency, storePaymentMethods = false, /*VAT,*/
-    plansTable = 'Plans', subscriptionsTable = 'Subscriptions', customersTable = 'Customers', productsTable = 'Products', paymentsTable = 'Payments',
-    paymentMethodsTable = 'PaymentMethods', productName = 'name', amount = 'amount', decimal = false, currency = 'currency', interval = 'interval', intervalCount = 'intervalCount',
+    plansTable = 'Plan', subscriptionsTable = 'Subscription', customersTable = 'Customer', productsTable = 'Product', paymentsTable = 'Payment',
+    paymentMethodsTable = 'PaymentMethod', productName = 'name', amount = 'amount', decimal = false, currency = 'currency', interval = 'interval', intervalCount = 'intervalCount',
     trialPeriod = 'trialPeriod', product = 'product', customer = 'customer', subscriptionItems = 'items', paymentMethod='paymentMethod',
     expMonth = 'expMonth', expYear = 'expYear', cardNumber = 'card', cardCVC = 'cvc', iban = 'iban', idealBank = 'ideal', paymentType = 'paymentType',
-    clientSecret = 'clientSecret'
+    clientSecret = 'clientSecret', listeners = {},
   } = config;
   const stripe = getOptionalDep('stripe', 'StripePlugin')(secretKey);
   const bodyParser = require('body-parser');
@@ -37,7 +37,7 @@ const createStripePlugin = async config => {
         trial_period_days: source[trialPeriod],
         amount: decimal ? Math.floor((source[amount] || 0)*100) : source[amount],
         interval: source[interval],
-        interval_count: source[intervalCount],
+        interval_count: source[intervalCount] || 1,
         product: source[product] && source[product].reservedId
       });
         break;
@@ -89,8 +89,7 @@ const createStripePlugin = async config => {
   }
 
   // Match the raw body to content type application/json
-  const callbacks = {};
-  app.post(url.pathname, bodyParser.raw({type: 'application/json'}), webhookListener(stripe, secret, callbacks));
+  app.post(url.pathname, bodyParser.raw({type: 'application/json'}), webhookListener(stripe, secret, listeners));
 
   return {
     preRequisite: async tables => {

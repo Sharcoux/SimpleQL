@@ -58,8 +58,10 @@ class Driver {
     return new Promise((resolve, reject) => {
       this.pool.getConnection((err, connection) => {
         if(err) reject(err);
-        this.connection = connection;
-        return this.query('START TRANSACTION').then(resolve).catch(reject);
+        else {
+          this.connection = connection;
+          return this.query('START TRANSACTION').then(resolve).catch(reject);
+        }
       });
     });
   }
