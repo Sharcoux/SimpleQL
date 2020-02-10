@@ -2,11 +2,6 @@
 const categories = {
   // 'database query' : 'bold',
   // 'database result' : 'default',
-  'test title' : 'cyan',
-  'test error title' : 'lightRed',
-  'test request' : 'default',
-  'test response' : 'bold',
-  'test error response' : 'bold',
   // 'resolution part' : 'default',
   // 'resolution part title' : 'magenta',
   // 'access warning' : 'yellow',

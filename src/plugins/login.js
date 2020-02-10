@@ -133,7 +133,8 @@ function createLoginPlugin(config) {
                 request[password] = 'facebook';//As this is not a hash, no one will be able to connect with this without the access token
               });
             } else if(request[login] && request[password]) {
-              //Someone is trying to register with login/password. We will hash the pwd and add a salt string if required
+              //Someone is trying to register with login/password.
+              //We will hash the pwd and add a salt string if required
               isString(login, request[login], userTable);
               isString(password, request[password], userTable);
               // creating a unique salt for a particular user
