@@ -28,7 +28,13 @@ Object.assign(User, {
     //Or the short string form
     'pseudo/8',
     'contacts/unique',
-    'invited/unique'
+    'invited/unique',
+    //You can create an index between multiple columns
+    {
+      column: ['email', 'pseudo'],
+      length: [8, 8],
+      type: 'unique'
+    }
   ],
 });
 

@@ -26,11 +26,9 @@ const plugins = [
 ];
 ```
 
-## Sign in
+### Sign in
 
 Sign in is done like this:
-
-## Login
 
 ```javascript
 const request = {

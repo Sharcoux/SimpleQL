@@ -96,12 +96,13 @@ function checkTables(tables) {
         });
         //check length
         if(index.length) {
-          if(isNaN(index.length)) throw new Error(`The length value ${index.length} in the index entry from table ${tableName} must be a number, but it was ${toType(index.length)}.`);
-          //Check that the index length is not longer than the column length
-          if(columns.every(column => tables[tableName][column].length)) {
-            const sum = columns.reduce((sum, column) => sum + (tables[tableName][column].length || 0), 0);
-            if(index.length>sum) throw new Error(`The length for index ${index.column} is larger than the length of the column specified in the table ${tableName}.`);
-          }
+          const lengths = Array.isArray(index.length) ? index.length : [index.length];
+          lengths.forEach((length, i) => {
+            //Check that the length is a number
+            if(isNaN(length)) throw new Error(`The length value ${length} in the index entry from table ${tableName} must be a number, but it was ${toType(length)}.`);
+            //Check that the index length is not wider than the column length
+            if(tables[tableName][columns[i]].length && length > tables[tableName][columns[i]].length) throw new Error(`The length for column ${columns[i]} for index ${index.column} is larger than the length of the column specified in the table ${tableName}.`);
+          });
         }
         //check type
         if(index.type && !indexTypes.includes(index.type)) throw new Error(`The type of an index must belong to ${indexTypes} in table ${tableName}. We received: ${index.type}.`);
