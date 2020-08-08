@@ -51,6 +51,7 @@ function checkTables(tables) {
           }
           break;
         }
+        case 'json':
         case 'date':
         case 'dateTime':
         case 'time':
