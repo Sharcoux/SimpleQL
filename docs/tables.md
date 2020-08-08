@@ -223,7 +223,12 @@ This might make it harder to read the interactions between tables and the comple
 ### 2) Creating all the tables and then creating all the properties and links at once with Object.assign
 
 ```javascript
-    const User = {};
+    import { modelFactory } = 'simple-ql'
+
+    const tables = {};
+    const { User, Products, Comments, Anything } = modelFactory(tables);
+
+    // Now you can do cross references and self-references
     Object.assign(User, {
         name : 'string/20',
         age : 'integer',

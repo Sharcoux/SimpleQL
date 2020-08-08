@@ -19,6 +19,7 @@ module.exports = {
   errors,
   plugins,
   getQuery,
+  modelFactory: tables => new Proxy(tables, { get: (target, name) => (target[name] = {}) } )
 };
 
 function createServer({tables = {}, database = {}, rules = {}, plugins = [], middlewares = [], app}, { root = '/', sizeLimit = '5mb', requestPerMinute = 1000 } = {}) {
