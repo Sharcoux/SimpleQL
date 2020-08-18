@@ -59,7 +59,7 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
       //Add the middlewares
       allMiddlewares.forEach(m => app.use(root, m));
       //Listen to simple QL requests
-      app.all(root, simpleQL(requestHandler));
+      app.all(root, simpleQL(databaseName));
       //Add error handlers
       errorHandlers.forEach(h => app.use(root, h));
       //Final error handler, ditching error
@@ -78,11 +78,12 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
 }
 
 /** The middleware in charge of treating simpleQL requests */
-function simpleQL(requestHandler) {
+function simpleQL(databaseName) {
   return (req, res, next) => {
     const authId = res.locals.authId;
     //We forward the request to the database
-    requestHandler(authId, req.body)
+    getQuery(databaseName)
+      .then(query => query(req.body, authId))
       .then(results => {
         res.json(results);
         next();
