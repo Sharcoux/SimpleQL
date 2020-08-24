@@ -21,6 +21,7 @@ class Driver {
   constructor(pool) {
     this.binaries = [];
     this.dates = [];
+    this.json = [];
     this.pool = pool;
     this.connection = pool;
     this.inTransaction = false;
@@ -131,7 +132,9 @@ class Driver {
         ? `0x${value.toString('hex')}`
         : this.dates.includes(table+'.'+key)
           ? es(new Date(value))
-          : es(value);
+          : this.json.includes(table+'.'+key)
+            ? es(JSON.stringify(value))
+            : es(value);
   }
   update({table, values, where}) {
     //If a condition specify that no value is accepted for a column, no result will match the constraint
@@ -151,6 +154,7 @@ class Driver {
       if(type==='binary' || type==='varbinary') this.binaries.push(`${table}.${name}`);
       if((type==='string' || type==='varchar' || type==='varbinary') && !length) throw new Error(`You must specify the length of columns of type ${type}, such as ${name} in ${table}.`);
       else if(type==='dateTime') this.dates.push(`${table}.${name}`);
+      else if(type==='json') this.json.push(`${table}.${name}`);
 
       let query = `${name} ${convertType(type)}`;
       if(length) query += `(${length})`;
