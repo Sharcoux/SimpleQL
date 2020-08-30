@@ -754,14 +754,23 @@ function createTables({driver, tables, create}) {
     return acc;
   }, {});
   //Create the tables if needed
-  if(create) return sequence(Object.keys(data).map(tableName => () => {
+  return sequence(Object.keys(data).map(tableName => () => {
     //We retrieve tables indexes from the prepared table
-    const index = data[tableName].index;
-    delete data[tableName].index;
-    return driver.createTable({table: tableName, data: data[tableName], index});
-  })).then(() => driver.createForeignKeys(foreignKeys)).then(() => data);
-  log('info', 'The "create" property was not set in the "database" object. Skipping tables creation.');
-  return Promise.resolve(data);
+    const columnData = data[tableName];
+    const index = columnData.index;
+    delete columnData.index;
+    const tableData = {table: tableName, data: columnData, index};
+    if (create) {
+      return driver.createTable(tableData);
+    } else {
+      return driver.processTable(tableData)
+    }
+  }))
+  .then(() => {
+    if (create)
+      return driver.createForeignKeys(foreignKeys).then(() => data);
+    return Promise.resolve(data)
+  })
 }
 
 /** Load the driver according to database type, and create the database connection, and the database itself if required */
