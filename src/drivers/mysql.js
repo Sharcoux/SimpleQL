@@ -34,6 +34,7 @@ class Driver {
     this.create = this.create.bind(this);
     this.delete = this.delete.bind(this);
     this.createTable = this.createTable.bind(this);
+    this.processTable = this.processTable.bind(this);
     this._escapeValue = this._escapeValue.bind(this);
     this._createQuery = this._createQuery.bind(this);
     this._convertIntoCondition = this._convertIntoCondition.bind(this);
@@ -146,15 +147,28 @@ class Driver {
     const query = this._createQuery(`UPDATE ${ei(table)} SET ${setQuery}`, where, table);
     return this.query(query).catch(errorHandler(table));
   }
+  processColumnType(table, name, data) {
+    const { type, length } = data;
+    //We record binary columns to not escape their values during INSERT or UPDATE
+    if(type==='binary' || type==='varbinary') this.binaries.push(`${table}.${name}`);
+    if((type==='string' || type==='varchar' || type==='varbinary') && !length) throw new Error(`You must specify the length of columns of type ${type}, such as ${name} in ${table}.`);
+    else if(type==='dateTime') this.dates.push(`${table}.${name}`);
+    else if(type==='json') this.json.push(`${table}.${name}`);
+  }
+  processTable({table = '', data = {}}) {
+    const columnsKeys = Object.keys(data).filter(key => key!=='index');
+    columnsKeys.forEach(name => {
+      const columnData = data[name];
+      this.processColumnType(table, name, columnData);
+    });
+    return Promise.resolve();
+  }
   createTable({table = '', data = {}, index = []}) {
     const columnsKeys = Object.keys(data).filter(key => key!=='index');
     const columns = columnsKeys.map(name => {
-      const { type, length, unsigned, notNull, defaultValue, autoIncrement } = data[name];
-      //We record binary columns to not escape their values during INSERT or UPDATE
-      if(type==='binary' || type==='varbinary') this.binaries.push(`${table}.${name}`);
-      if((type==='string' || type==='varchar' || type==='varbinary') && !length) throw new Error(`You must specify the length of columns of type ${type}, such as ${name} in ${table}.`);
-      else if(type==='dateTime') this.dates.push(`${table}.${name}`);
-      else if(type==='json') this.json.push(`${table}.${name}`);
+      const columnData = data[name];
+      const { type, length, unsigned, notNull, defaultValue, autoIncrement } = columnData;
+      this.processColumnType(table, name, columnData);
 
       let query = `${name} ${convertType(type)}`;
       if(length) query += `(${length})`;
