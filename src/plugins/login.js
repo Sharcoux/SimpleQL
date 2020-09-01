@@ -68,6 +68,17 @@ function createHash(password, salt) {
   });
 }
 
+function processRequestPassword(request, userTable, password, salt) {
+  // We will hash the pwd and add a salt string if required
+  // creating a unique salt for a particular user
+  const saltBinary = salt ? crypto.randomBytes(16) : '';
+  // hashing user's salt and password with 1000 iterations, 64 length and sha512 digest
+  return createHash(request[password], saltBinary.toString('hex')).then(hash => {
+    if (salt) request[salt] = saltBinary;
+    request[password] = hash;
+  });
+}
+
 /**
  * Manage login and user creation into the database
  * @param {string} userTable The table that will store the user's data
@@ -134,16 +145,9 @@ function createLoginPlugin(config) {
               });
             } else if(request[login] && request[password]) {
               //Someone is trying to register with login/password.
-              //We will hash the pwd and add a salt string if required
               isString(login, request[login], userTable);
               isString(password, request[password], userTable);
-              // creating a unique salt for a particular user
-              const saltBinary = salt ? crypto.randomBytes(16) : '';
-              // hashing user's salt and password with 1000 iterations, 64 length and sha512 digest
-              return createHash(request[password], saltBinary.toString('hex')).then(hash => {
-                if(salt) request[salt] = saltBinary;
-                request[password] = hash;
-              });
+              return processRequestPassword(request, userTable, password, salt);
             } else {
               //Missing subscription details
               const googleOption = google ? `, or a ${google}` : '';
@@ -158,6 +162,10 @@ function createLoginPlugin(config) {
             logger('info', request[login], 'is being created');
           });
         //Logging a user
+        } else if(request.set && request.set[password]) {
+          //Someone is trying to update password
+          isString(password, request.set[password], userTable);
+          return processRequestPassword(request.set, userTable, password, salt);
         } else {
           return Promise.resolve().then(() => {
             if(google && request[google]) {
