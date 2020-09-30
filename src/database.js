@@ -6,13 +6,13 @@ const log = require('./utils/logger');
 
 /** Load the driver according to database type, and create the database connection, and the database itself if required */
 function createDatabase({tables, database, rules = {}, plugins = []}) {
-  const { type, privateKey, create, database : databaseName} = database;
+  const { type, privateKey, create } = database;
 
   //Load the driver dynamically
   const createDriver = require(`./drivers/${type}`);
   if(!createDriver) return Promise.reject(`${type} is not supported right now. Try mysql for instance.`);
   //create the driver to the database
-  return createDriver(database, ensureCreation)
+  return createDriver(database)
     .then(driver => createTables({driver, tables, create})
       .then(tablesModel => createRequestHandler({tables, rules, tablesModel, plugins, driver, privateKey}))
       .then(requestHandler => {
@@ -757,14 +757,14 @@ function createTables({driver, tables, create}) {
     if (create) {
       return driver.createTable(tableData);
     } else {
-      return driver.processTable(tableData)
+      return driver.processTable(tableData);
     }
   }))
-  .then(() => {
-    if (create)
-      return driver.createForeignKeys(foreignKeys).then(() => data);
-    return Promise.resolve(data)
-  })
+    .then(() => {
+      if (create)
+        return driver.createForeignKeys(foreignKeys).then(() => data);
+      return Promise.resolve(data);
+    });
 }
 
 module.exports = createDatabase;

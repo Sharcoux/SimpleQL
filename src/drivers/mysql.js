@@ -300,7 +300,7 @@ function errorHandler(table) {
 module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host = 'localhost', connectionLimit = 100, ...parameters}) => {
   return Promise.resolve().then(() => {
     if(!create) return Promise.resolve();
-      //Instantiate a connection to create the database
+    //Instantiate a connection to create the database
     const pool = mysql.createPool({...parameters, connectionLimit, host });
     const driver = new Driver(pool);
     return driver.query(`SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${database}'`)
