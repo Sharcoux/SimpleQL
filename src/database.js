@@ -1,5 +1,4 @@
 /** This is the core of SimpleQL where every request is cut in pieces and transformed into a query to the database */
-const readline = require('readline');
 const { isPrimitive, toType, classifyRequestData, operators, sequence, stringify, filterObject } = require('./utils');
 const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, DATABASE_ERROR, WRONG_VALUE } = require('./errors');
 const { prepareTables, prepareRules } = require('./prepare');
@@ -13,12 +12,7 @@ function createDatabase({tables, database, rules = {}, plugins = []}) {
   const createDriver = require(`./drivers/${type}`);
   if(!createDriver) return Promise.reject(`${type} is not supported right now. Try mysql for instance.`);
   //create the driver to the database
-  return Promise.resolve().then(() => {
-    //Make sure that we really intend to reset the database if it exists
-    //TODO check if the database really already existed
-    if(create) return ensureCreation(databaseName);
-  }).then(() => createDriver(database))
-    //We need to prepare and create the association tables and other tables into the database
+  return createDriver(database, ensureCreation)
     .then(driver => createTables({driver, tables, create})
       .then(tablesModel => createRequestHandler({tables, rules, tablesModel, plugins, driver, privateKey}))
       .then(requestHandler => {
@@ -771,20 +765,6 @@ function createTables({driver, tables, create}) {
       return driver.createForeignKeys(foreignKeys).then(() => data);
     return Promise.resolve(data)
   })
-}
-
-/** Load the driver according to database type, and create the database connection, and the database itself if required */
-function ensureCreation(databaseName) {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-  return new Promise((resolve, reject) =>
-    rl.question(`Are you sure that you wish to completely erase any previous database called ${databaseName} (y/N)\n`, answer => {
-      rl.close();
-      answer.toLowerCase()==='y' ? resolve() : reject('If you don\'t want to erase the database, remove the "create" property from the "database" object.');
-    })
-  );
 }
 
 module.exports = createDatabase;

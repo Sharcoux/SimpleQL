@@ -7,7 +7,7 @@ try {
 } catch(err) {
   throw new Error('You must run `npm add mysql -S` to be able to use `mysql` database.');
 }
-const { isPrimitive, operators, sequence } = require('../utils');
+const { isPrimitive, operators, sequence, ensureCreation } = require('../utils');
 const log = require('../utils/logger');
 
 //Shortcuts for escaping
@@ -300,11 +300,13 @@ function errorHandler(table) {
 module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host = 'localhost', connectionLimit = 100, ...parameters}) => {
   return Promise.resolve().then(() => {
     if(!create) return Promise.resolve();
-    //Instantiate a connection to create the database
+      //Instantiate a connection to create the database
     const pool = mysql.createPool({...parameters, connectionLimit, host });
     const driver = new Driver(pool);
-    //Destroy previous database if required
-    return driver.query(`DROP DATABASE IF EXISTS ${database}`)
+    return driver.query(`SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${database}'`)
+      .then(exists => exists.length && ensureCreation(database))
+      //Destroy previous database if required
+      .then(() => driver.query(`DROP DATABASE IF EXISTS ${database}`))
       .catch(err => {
         if(err.code === 'ECONNREFUSED') return Promise.reject(`Failed to connect to the database. Make sure that you have a MySQL database running on port ${err.port} of host ${err.address}. If you don't have a mysql database, you can install one with the following commands:
           sudo apt install mysql-server
@@ -315,6 +317,7 @@ module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host
           * downgrade your mysql server to 5.6.40,
           * use a non root user,
           * or run:
+              sudo mysql
               ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'password'`);
         else return Promise.reject(err);
       })

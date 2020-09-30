@@ -129,6 +129,21 @@ function getOptionalDep(dependency, requester) {
   }
 }
 
+/** Ask the user if they really want to delete their database */
+function ensureCreation(databaseName) {
+  const readline = require('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+  return new Promise((resolve, reject) =>
+    rl.question(`Are you sure that you wish to completely erase any previous database called ${databaseName} (y/N)\n`, answer => {
+      rl.close();
+      answer.toLowerCase()==='y' ? resolve() : reject('If you don\'t want to erase the database, remove the "create" property from the "database" object.');
+    })
+  );
+}
+
 const reservedKeys = ['reservedId', 'set', 'get', 'created', 'deleted', 'edited', 'delete', 'create', 'add', 'remove', 'not', 'like', 'or', 'limit', 'order', 'offset', 'tableName', 'foreignKeys', 'type', 'parent', 'index', 'notNull', 'reserved', 'required'];
 const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', '~', '!'];
 
@@ -145,4 +160,5 @@ module.exports = {
   any,
   sequence,
   getOptionalDep,
+  ensureCreation
 };
