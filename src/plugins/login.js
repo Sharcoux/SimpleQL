@@ -1,5 +1,6 @@
 /** Login Plugin. Check the documentation **/
 const { BAD_REQUEST, NOT_FOUND, WRONG_PASSWORD } = require('../errors');
+const fs = require('fs');
 const crypto = require('crypto');
 const check = require('../utils/type-checking');
 const { login : loginModel , dbColumn } = require('../utils/types');
@@ -101,7 +102,9 @@ function processRequestPassword(request, userTable, password, salt) {
  * @param {string} salt The column that will store the random generated salt for the password (optional)
  * @param {Object} jwtConfig The config for the jwt encryption (optional)
  */
-function createLoginPlugin(config) {
+function createLoginPlugin({ ...config }) {
+  const jwtConfig = Object.assign({ algorithm: algoJWT, expiresIn: '2h' }, config.jwtConfig);
+  delete config.jwtConfig;
   check(loginModel, config);
   const { login = 'email', password = 'password', salt, userTable = 'User', firstname, lastname, plugins: { google, facebook } = {}, jwtConfig } = config;
 
@@ -113,7 +116,11 @@ function createLoginPlugin(config) {
       const token = req.headers && req.headers.authorization && req.headers.authorization.split(' ')[1];
       if(token) {
         //A request is being authenticated with a JWT token
-        checkJWT(token, jwtConfig).then(decoded => (res.locals.authId = Number.parseInt(decoded.id, 10)))
+        checkJWT(token, jwtConfig)
+          .catch(error => {
+            res.status(401).json({ error });
+          })
+          .then(decoded => (res.locals.authId = Number.parseInt(decoded.id, 10)))
           .then(() => logger('login', `${userTable} ${res.locals.authId} is making a request.`))
           .then(() => next())
           .catch(next);
