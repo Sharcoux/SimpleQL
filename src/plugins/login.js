@@ -118,7 +118,8 @@ function createLoginPlugin({ ...config }) {
         //A request is being authenticated with a JWT token
         checkJWT(token, jwtConfig)
           .catch(error => {
-            res.status(401).json({ error });
+            const response = { name: 'JsonWebTokenError', message: error.message }
+            res.status(401).json({ error: response )
           })
           .then(decoded => (res.locals.authId = Number.parseInt(decoded.id, 10)))
           .then(() => logger('login', `${userTable} ${res.locals.authId} is making a request.`))
