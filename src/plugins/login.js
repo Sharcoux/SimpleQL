@@ -41,18 +41,18 @@ function isString(key, value, table) {
   });
 }
 
-function createJWT(id) {
+function createJWT(id, jwtConfig = { algorithm: algoJWT, expiresIn: '2h'}) {
   return new Promise((resolve, reject) => {
-    jwt.sign({id: id+''}, privateKey, { algorithm: algoJWT, expiresIn: '2h'}, (err, token) => {
+    jwt.sign({id: id+''}, privateKey, jwtConfig, (err, token) => {
       if(err) reject(err);
       resolve(token);
     });
   });
 }
 
-function checkJWT(token) {
+function checkJWT(token, jwtConfig = { algorithm: algoJWT }) {
   return new Promise((resolve, reject) => {
-    jwt.verify(token, publicKey, { algorithm: algoJWT }, (err, decoded) => {
+    jwt.verify(token, publicKey, jwtConfig, (err, decoded) => {
       if(err) reject(err);
       resolve(decoded);
     });
@@ -85,10 +85,11 @@ function processRequestPassword(request, userTable, password, salt) {
  * @param {string} login The column that will store the user's login
  * @param {string} password The column that will store the user's password
  * @param {string} salt The column that will store the random generated salt for the password (optional)
+ * @param {Object} jwtConfig The config for the jwt encryption (optional)
  */
 function createLoginPlugin(config) {
   check(loginModel, config);
-  const { login = 'email', password = 'password', salt, userTable = 'User', firstname, lastname, plugins: { google, facebook } = {} } = config;
+  const { login = 'email', password = 'password', salt, userTable = 'User', firstname, lastname, plugins: { google, facebook } = {}, jwtConfig } = config;
 
   let axios;
   if(google || facebook) axios = getOptionalDep('axios', 'LoginPlugin');
@@ -98,7 +99,7 @@ function createLoginPlugin(config) {
       const token = req.headers && req.headers.authorization && req.headers.authorization.split(' ')[1];
       if(token) {
         //A request is being authenticated with a JWT token
-        checkJWT(token).then(decoded => (res.locals.authId = Number.parseInt(decoded.id, 10)))
+        checkJWT(token, jwtConfig).then(decoded => (res.locals.authId = Number.parseInt(decoded.id, 10)))
           .then(() => logger('login', `${userTable} ${res.locals.authId} is making a request.`))
           .then(() => next())
           .catch(next);
@@ -226,7 +227,7 @@ function createLoginPlugin(config) {
                 const tokens = local.jwt || {};
                 local.authId = reservedId;
                 //If the log succeeds, we return a jwt token
-                return createJWT(reservedId)
+                return createJWT(reservedId, jwtConfig)
                   .then(jwtToken => tokens[reservedId] = jwtToken)
                   .then(() => local.jwt = tokens);
               }).then(() => {
@@ -242,7 +243,7 @@ function createLoginPlugin(config) {
         const reservedId = createdObject.reservedId;
         //Once the user is created inside the database, we set the authId to treat each further command on his behalf
         local.authId = reservedId;
-        return createJWT(reservedId)
+        return createJWT(reservedId, jwtConfig)
           .then(jwt => {
             //Add the jwt to the created object
             createdObject.jwt = jwt;

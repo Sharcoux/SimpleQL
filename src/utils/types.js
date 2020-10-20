@@ -34,6 +34,20 @@ const login = {
     facebook: 'string',
     strict: true,
   },
+  jwtConfig: {
+    algorithm: 'string',
+    expiresIn: 'string',
+    notBefore: 'string',
+    audience: 'string',
+    issuer: 'string',
+    jwtid: 'string',
+    subject: 'string',
+    noTimestamp: 'string',
+    header: '*',
+    keyId: 'string',
+    mutatePayload: 'string',
+    strict: true
+  },
   required : ['login', 'password', 'userTable'],
   strict : true,
 };

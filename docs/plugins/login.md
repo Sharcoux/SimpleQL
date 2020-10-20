@@ -109,3 +109,26 @@ This is how you can sign in a user with Google:
 ```
 
 **Note**: Don't forget to register your domain on Facebook and Google to enable this kind of access.
+
+## jwt configuration
+
+To specify jwt config, just pass the following optionnal parameter:
+
+ * **algorithm** : The algorithme to be used (default: HS256)
+ * **expiresIn** : Expressed in seconds or a string describing a time span zeit/ms. Eg: 60, "2 days", "10h", "7d". A numeric value is interpreted as a seconds count. A string value without units will be interpreted as milliseconds.
+ * **notBefore** : Expressed in seconds or a string describing a time span zeit/ms. Eg: 60, "2 days", "10h", "7d". A numeric value is interpreted as a seconds count. A string value without units will be interpreted as milliseconds.
+
+Here are the other parameters:
+
+ * audience
+ * issuer
+ * jwtid
+ * subject
+ * noTimestamp
+ * header
+ * keyid
+ * mutatePayload
+
+See the details at [jsonwebtoken website](https://github.com/auth0/node-jsonwebtoken)
+
+Generated jwts will include an iat (issued at) claim by default unless noTimestamp is specified. If iat is inserted in the payload, it will be used instead of the real timestamp for calculating other things like exp given a timespan in options.expiresIn.
