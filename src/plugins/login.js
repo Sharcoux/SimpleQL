@@ -102,9 +102,7 @@ function processRequestPassword(request, userTable, password, salt) {
  * @param {string} salt The column that will store the random generated salt for the password (optional)
  * @param {Object} jwtConfig The config for the jwt encryption (optional)
  */
-function createLoginPlugin({ ...config }) {
-  const jwtConfig = Object.assign({ algorithm: algoJWT, expiresIn: '2h' }, config.jwtConfig);
-  delete config.jwtConfig;
+function createLoginPlugin(config) {
   check(loginModel, config);
   const { login = 'email', password = 'password', salt, userTable = 'User', firstname, lastname, plugins: { google, facebook } = {}, jwtConfig } = config;
 
