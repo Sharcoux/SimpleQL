@@ -1,5 +1,6 @@
 /** Login Plugin. Check the documentation **/
 const { BAD_REQUEST, NOT_FOUND, WRONG_PASSWORD } = require('../errors');
+const fs = require('fs');
 const crypto = require('crypto');
 const check = require('../utils/type-checking');
 const { login : loginModel , dbColumn } = require('../utils/types');
@@ -113,7 +114,12 @@ function createLoginPlugin(config) {
       const token = req.headers && req.headers.authorization && req.headers.authorization.split(' ')[1];
       if(token) {
         //A request is being authenticated with a JWT token
-        checkJWT(token, jwtConfig).then(decoded => (res.locals.authId = Number.parseInt(decoded.id, 10)))
+        checkJWT(token, jwtConfig)
+          .catch(error => {
+            const response = { ...error, name: 'JsonWebTokenError' };
+            res.status(401).json({ error: response });
+          })
+          .then(decoded => (res.locals.authId = Number.parseInt(decoded.id, 10)))
           .then(() => logger('login', `${userTable} ${res.locals.authId} is making a request.`))
           .then(() => next())
           .catch(next);
