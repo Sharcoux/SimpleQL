@@ -124,7 +124,11 @@ function createLoginPlugin(config) {
               error.name === 'NotBeforeError' ? 425 :
               error.name === 'TokenExpiredError' ? 401 :
               401
-            next({ ...error, status })
+            const message =
+              error.message === 'jwt signature is required' ? 'This jwt error should not be happenning. Please report this.' :
+              error.message === 'invalid signature' ? 'There was an issue when reading the public.pem file. Please report this.' :
+              error.message
+            next({ ...error, message, status })
           })
       } else next();
     },
