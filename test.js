@@ -333,6 +333,12 @@ createTestServer()
     }}))]);
   })
 
+  // Handle wrong jwt
+  .then(() => Testing.setJWT('dummy'))
+  .then(() => test([
+    createTest(false, 'Forbidden : wrong JWT', { User: { get: '*' } })
+  ]))
+
   .catch(err => {
     if(err.response) {
       console.error(err.message, '\n', err.response.data);

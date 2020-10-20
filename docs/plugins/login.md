@@ -114,7 +114,7 @@ This is how you can sign in a user with Google:
 
 To specify jwt config, just pass the following optionnal parameter:
 
- * **algorithm** : The algorithme to be used (default: HS256)
+ * **algorithm** : The algorithme to be used (default: HS256). Find the list [here](https://github.com/auth0/node-jsonwebtoken#algorithms-supported)
  * **expiresIn** : Expressed in seconds or a string describing a time span zeit/ms. Eg: 60, "2 days", "10h", "7d". A numeric value is interpreted as a seconds count. A string value without units will be interpreted as milliseconds.
  * **notBefore** : Expressed in seconds or a string describing a time span zeit/ms. Eg: 60, "2 days", "10h", "7d". A numeric value is interpreted as a seconds count. A string value without units will be interpreted as milliseconds.
 

@@ -30,7 +30,7 @@ try {
     }
   });
   fs.writeFileSync('public.pem', keyPair.publicKey);
-  fs.writeFileSync('private.key', keyPair.privateKey);
+  fs.writeFileSync('private.key', keyPair.privateKey, { mode: 0o770 });
 }
 
 
@@ -115,14 +115,17 @@ function createLoginPlugin(config) {
       if(token) {
         //A request is being authenticated with a JWT token
         checkJWT(token, jwtConfig)
-          .catch(error => {
-            const response = { ...error, name: 'JsonWebTokenError' };
-            res.status(401).json({ error: response });
-          })
           .then(decoded => (res.locals.authId = Number.parseInt(decoded.id, 10)))
           .then(() => logger('login', `${userTable} ${res.locals.authId} is making a request.`))
           .then(() => next())
-          .catch(next);
+          .catch(error => {
+            const status =
+              error.name === 'JsonWebTokenError' ? 400 :
+              error.name === 'NotBeforeError' ? 425 :
+              error.name === 'TokenExpiredError' ? 401 :
+              401
+            next({ ...error, status })
+          })
       } else next();
     },
     preRequisite : (tables) => {
