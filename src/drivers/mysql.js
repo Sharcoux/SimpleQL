@@ -1,6 +1,11 @@
+// @ts-check
+
 /** This file contains the Driver that will convert SimpleQL requests into MySQL queries **/
 const { WRONG_VALUE, CONFLICT, REQUIRED } = require('../errors');
+const Driver = require('./template');
 
+/** @type {import('mysql')} */
+// @ts-ignore
 const mysql = {};
 try {
   Object.assign(mysql, require('mysql'));
@@ -17,12 +22,19 @@ const es = mysql.escape;
 const ei = mysql.escapeId;
 
 //TODO : format requests results
-class Driver {
+/** MysqlDriver to communicate with Mysql Database */
+class MysqlDriver extends Driver {
   constructor(pool) {
+    super();
+    /** @type {string[]} */
     this.binaries = [];
+    /** @type {string[]} */
     this.dates = [];
+    /** @type {string[]} */
     this.json = [];
+    /** @type {import('mysql').Pool} */
     this.pool = pool;
+    /** @type {import('mysql').PoolConnection} */
     this.connection = pool;
     this.inTransaction = false;
     this.startTransaction = this.startTransaction.bind(this);
@@ -39,7 +51,12 @@ class Driver {
     this._createQuery = this._createQuery.bind(this);
     this._convertIntoCondition = this._convertIntoCondition.bind(this);
   }
-  query(query) {
+  /**
+   * Send a query to the database
+   * @param {string} query Query to be sent to the database
+   * @returns {Promise<any>} The result of the request
+   */
+  async query(query) {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(`timeout for requet ${query}`), 5000);
       log('database query', `Executing ${query}`);
@@ -50,10 +67,12 @@ class Driver {
       });
     });
   }
-  destroy() {
+  async destroy() {
+    // @ts-ignore
     this.connection.end(console.error);
+    return Promise.resolve();
   }
-  startTransaction() {
+  async startTransaction() {
     //We need to ensure that we are using the same connection during the whole transaction
     if(this.inTransaction) return Promise.reject('You already started a transaction. Call `commit()` or `rollback()` to terminate it.');
     this.inTransaction = true;
@@ -67,44 +86,63 @@ class Driver {
       });
     });
   }
-  commit() {
+  async commit() {
     if(!this.inTransaction) return Promise.reject('You must start a transaction with `startTransaction()` before being able to commit it.');
     return this.query('COMMIT').then(() => {
       this.connection.release();
+      // TODO ensure that this affectation is legit
+      // @ts-ignore
       this.connection = this.pool;
       this.inTransaction = false;
     });
   }
-  rollback() {
+  async rollback() {
     if(!this.inTransaction) return Promise.reject('You must start a transaction with `startTransaction()` before being able to roll it back.');
     return this.query('ROLLBACK').then(() => {
       this.connection.release();
+      // TODO ensure that this affectation is legit
+      // @ts-ignore
       this.connection = this.pool;
       this.inTransaction = false;
     });
   }
-  get({table, search, where, offset, limit, order}) {
+  /**
+   * Read data from the current database
+   * @param {import('./template').GetParam} getParam The object describing the request
+   * @returns {Promise<import('../utils').Element[]>} The results
+   */
+  async get({table, search, where, offset, limit, order}) {
     if(!search.length) return Promise.resolve([]);
     //If a condition specify that no value is accepted for a column, no result will match the constraint
     if(Object.values(where).find(v => Array.isArray(v) && v.length===0)) return Promise.resolve([]);
     let query = this._createQuery(`SELECT ${search.map(s => ei(s)).join(', ')} FROM ${ei(table)}`, where, table);
     //order: ['name', '-age'] will sort by ascending name and descending age
     if(order) query += ` ORDER BY ${order.map(column => (column.startsWith('-') ? `${ei(column.substring(1))} DESC` : `${ei(column)} ASC`)).join(', ')}`;
-    if(limit) query += ` LIMIT ${es(parseInt(limit, 10))}`;
-    if(offset) query += ` OFFSET ${es(parseInt(offset, 10))}`;
+    if(limit) query += ` LIMIT ${es(limit)}`;
+    if(offset) query += ` OFFSET ${es(offset)}`;
     return this.query(query).catch(errorHandler(table)).then(results => {
       log('database result', JSON.stringify(results));
       return Array.isArray(results) ? results : [results];
     });
   }
-  delete({table, where}) {
+  /**
+   * Remove an entry from the current database
+   * @param {import('./template').DeleteParam} deleteParam The object describing the request
+   * @returns {Promise<any[]>} The results
+   */
+  async delete({table, where}) {
     //If a condition specify that no value is accepted for a column, no result will match the constraint
     if(Object.values(where).find(v => Array.isArray(v) && v.length===0)) return Promise.resolve([]);
     const query = this._createQuery(`DELETE FROM ${ei(table)}`, where, table);
     return this.query(query).catch(errorHandler(table));
   }
-  create({table, elements}) {
-    if(!elements) return Promise.resolve();
+  /**
+   * Insert an entry into the current database
+   * @param {import('./template').CreateParam} createParam The object describing the request
+   * @returns {Promise<boolean[]>} The results
+   */
+  async create({table, elements}) {
+    if(!elements) return Promise.resolve([]);
     let list = Array.isArray(elements) ? elements : [elements];
     //For each property provided as an array, we duplicate the elements to be created. {a : [1, 2]} becomes [{a: 1}, {a : 2}].
     [...list].forEach(elt => {
@@ -127,6 +165,13 @@ class Driver {
       return this.query(query).catch(errorHandler(table)).then(results => Array.isArray(results) ? results.map(result => result.insertId) : results.insertId);
     }));
   }
+  /**
+   * Escape values according to their type, to avoid SQL injection
+   * @param {string} table The table targeted by the request
+   * @param {string} key The column
+   * @param {any} value The value associated with the column
+   * @returns {string} Returns the escaped value
+   */
   _escapeValue(table, key, value) {
     return value===null ? 'NULL'
       : this.binaries.includes(table+'.'+key)
@@ -137,9 +182,14 @@ class Driver {
             ? es(JSON.stringify(value))
             : es(value);
   }
-  update({table, values, where}) {
+  /**
+   * Update an entry in the current database
+   * @param {import('./template').UpdateParam} updateParam The object describing the request
+   * @returns {Promise<void>} The results
+   */
+  async update({table, values, where}) {
     //If a condition specify that no value is accepted for a column, no result will match the constraint
-    if(Object.values(where).find(v => Array.isArray(v) && v.length===0)) return Promise.resolve([]);
+    if(Object.values(where).find(v => Array.isArray(v) && v.length===0)) return Promise.resolve();
     const setQuery = Object.keys(values).map(key => {
       const value = values[key];
       return `${ei(key)}=${this._escapeValue(table, key, value)}`;
@@ -147,7 +197,13 @@ class Driver {
     const query = this._createQuery(`UPDATE ${ei(table)} SET ${setQuery}`, where, table);
     return this.query(query).catch(errorHandler(table));
   }
-  processColumnType(table, name, data) {
+  /**
+   * @private
+   * @param {string} table The table name
+   * @param {string} name The name of the column
+   * @param {import('../utils').Column} data The instructions for this column
+   */
+  _processColumnType(table, name, data) {
     const { type, length } = data;
     //We record binary columns to not escape their values during INSERT or UPDATE
     if(type==='binary' || type==='varbinary') this.binaries.push(`${table}.${name}`);
@@ -155,26 +211,36 @@ class Driver {
     else if(type==='dateTime') this.dates.push(`${table}.${name}`);
     else if(type==='json') this.json.push(`${table}.${name}`);
   }
-  processTable({table = '', data = {}}) {
+  /**
+   * Prepare the driver with the data if the table already exists
+   * @param {import('./template').ProcessTableParam} processTableParam 
+   * @returns {Promise<void>}
+   */
+  async processTable({table = '', data = /** @type {import('../utils').Table} **/({ notNull: [], index: [], tableName: '' })}) {
     const columnsKeys = Object.keys(data).filter(key => key!=='index');
     columnsKeys.forEach(name => {
       const columnData = data[name];
-      this.processColumnType(table, name, columnData);
+      this._processColumnType(table, name, columnData);
     });
     return Promise.resolve();
   }
-  createTable({table = '', data = {}, index = []}) {
+  /**
+   * Create a table in the current database
+   * @param {import('./template').CreateTableParam} createTableParam The object describing the request
+   * @returns {Promise<void>} The results
+   */
+  async createTable({table = '', data = /** @type {import('../utils').Table} **/({ notNull: [], index: [], tableName: '' }), index = []}) {
     const columnsKeys = Object.keys(data).filter(key => key!=='index');
     const columns = columnsKeys.map(name => {
       const columnData = data[name];
       const { type, length, unsigned, notNull, defaultValue, autoIncrement } = columnData;
-      this.processColumnType(table, name, columnData);
+      this._processColumnType(table, name, columnData);
 
       let query = `${name} ${convertType(type)}`;
       if(length) query += `(${length})`;
       if(unsigned) query += ' UNSIGNED';
       if(notNull) query += ' NOT NULL';
-      if(defaultValue) query += ` DEFAULT ${this._escapeValue(table, name, defaultValue)}`;
+      if(defaultValue) query += ` DEFAULT ${this._escapeValue(table, name, defaultValue instanceof Function ? defaultValue() : defaultValue)}`;
       if(autoIncrement) query += ' AUTO_INCREMENT';
       return query;
     });
@@ -199,7 +265,12 @@ class Driver {
       , CONSTRAINT PK_${table} PRIMARY KEY (reservedId)
     )`).catch(errorHandler(table));
   }
-  createForeignKeys(foreignKeys = {}) {
+  /**
+   * Create the foreign keys in the database
+   * @param {Object.<string, Object.<string, string>>} foreignKeys For each table, declares the keys that should be created with the name of the association.
+   * @returns {Promise<import('../utils').Element[]>} The results
+   */
+  async createForeignKeys(foreignKeys = {}) {
     return sequence(Object.keys(foreignKeys).map(tableName => () => {
       const keys = Object.keys(foreignKeys[tableName]);
       const query = keys.map(key => `ADD CONSTRAINT FK_${tableName}_${key} FOREIGN KEY (${key}) REFERENCES ${foreignKeys[tableName][key]}(reservedId) ON DELETE CASCADE ON UPDATE CASCADE`).join(',\n       ');
@@ -210,13 +281,33 @@ class Driver {
     }));
   }
 
+  /**
+   * Transform the simple-ql data into a mysql query
+   * @param {string} base The current query string
+   * @param {Object} where The constraint object to apply to the request
+   * @param {string} table The table name to query
+   * @returns {string} The formated and escaped query
+   */
   _createQuery(base, where, table) {
     if(!where || !Object.keys(where).length) return base;
     return `${base} WHERE ${this._convertIntoCondition(where, table)}`;
   }
   
+  /**
+   * Convert the constraint object into a mysql query string
+   * @param {Object} conditions The constraint object
+   * @param {string} table The table where the query will occure
+   * @param {import('./template').Operator} operator The operation to apply
+   * @returns {string} The resulting query string
+   */
   _convertIntoCondition(conditions, table, operator = '=') {
     return Object.keys(conditions).map(key => {
+      /**
+       * Write the value with the current operation
+       * @param {string} value The value
+       * @param {import('./template').Operator} operator The operation to apply
+       * @returns {string}
+       */
       const writeValue = (value, operator) => {
         switch(operator) {
           case 'ge':
@@ -238,11 +329,17 @@ class Driver {
             return value===null ? `${ei(key)} IS NULL` : `${ei(key)}=${this._escapeValue(table, key, value)}`;
         }
       };
+      /**
+       * Write the condition with the current operation
+       * @param {any} value The condition
+       * @param {import('./template').Operator} operator The operation to apply
+       * @returns {string}
+       */
       const writeCondition = (value, operator = '=') => {
         if(isPrimitive(value)) return writeValue(value, operator);
         if(['not', '!'].includes(operator)) return 'NOT ('+writeCondition(value)+')';
         if(Array.isArray(value)) return '('+value.map(v => writeCondition(v, operator)).join(' OR ')+')';
-        else if(value instanceof Object) return '('+Object.keys(value).map(k => {
+        else if(value instanceof Object) return '('+Object.keys(value).map((/** @type {import('./template').Operator} **/k) => {
           if(!operators.includes(k)) throw new Error(`${k} is not a valid constraint for key ${key}`);
           if(!['not', '!', '='].includes(operator)) throw new Error(`${k} connot be combined with operator ${operator} in key ${key}`);
           return writeCondition(value[k], k);
@@ -263,6 +360,11 @@ const operatorsMap = {
   '~' : 'LIKE',
 };
 
+/**
+ * Convert a simple-ql type into a mysql type
+ * @param {import('../utils').Column['type']} type The type to convert
+ * @returns {string} The mysql equivalent type
+ */
 function convertType(type) {
   switch(type) {
     case 'string': return 'VARCHAR';
@@ -270,6 +372,10 @@ function convertType(type) {
   }
 }
 
+/**
+ * An handler to handle mysql errors
+ * @param {string} table The table name
+ */
 function errorHandler(table) {
   return error => {
     if(error.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' && error.sqlMessage.includes('Access denied'))
@@ -297,12 +403,17 @@ function errorHandler(table) {
   };
 }
 
-module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host = 'localhost', connectionLimit = 100, ...parameters}) => {
+/**
+ * Database creation
+ * @param {import('../database').Database & import('mysql').PoolConfig} mysqlParam Driver configuration
+ * @returns {Promise<import('./template')>} Returns the driver to communicate with the database
+ */
+async function createDatabase ({database = 'simpleql', charset = 'utf8', create = false, host = 'localhost', connectionLimit = 100, ...parameters}) {
   return Promise.resolve().then(() => {
     if(!create) return Promise.resolve();
     //Instantiate a connection to create the database
     const pool = mysql.createPool({...parameters, connectionLimit, host });
-    const driver = new Driver(pool);
+    const driver = new MysqlDriver(pool);
     return driver.query(`SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${database}'`)
       .then(exists => exists.length && ensureCreation(database))
       //Destroy previous database if required
@@ -328,6 +439,8 @@ module.exports = ({database = 'simpleql', charset = 'utf8', create = false, host
     //Enter the database and returns the driver
     .then(() => {
       const pool = mysql.createPool({...parameters, database, connectionLimit, host });
-      return new Driver(pool);
+      return new MysqlDriver(pool);
     });
-};
+}
+
+module.exports = createDatabase;

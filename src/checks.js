@@ -1,11 +1,18 @@
+// @ts-check
+
 /** This file contains functions to check the validity of the parameters provided to simple-ql */
 const check = require('./utils/type-checking');
 const { dbColumn, database } = require('./utils/types');
 const { stringify, classifyData, reservedKeys, toType } = require('./utils');
 
-/** Check that the tables that are going to be created are valid */
+
+/**
+ * Check that the tables that are going to be created are valid
+ * @param {import('./utils').TablesDeclaration} tables The tables as they were declared
+ * @throws Throws an error if the tables are invalid
+ */
 function checkTables(tables) {
-  const acceptedTypes = ['string', 'integer', 'float', 'double', 'decimal', 'date', 'dateTime', 'time', 'year', 'boolean', 'char', 'text', 'binary', 'varbinary', 'varchar', 'json', ];
+  const acceptedTypes = ['string', 'integer', 'float', 'double', 'decimal', 'date', 'dateTime', 'time', 'year', 'boolean', 'char', 'text', 'binary', 'varbinary', 'varchar', 'json'];
   const lengthRequired = ['char', 'binary', 'decimal', 'varchar', 'srting'];
   const numeric = ['integer', 'float', 'decimal', 'double'];
   const indexTypes = ['unique', 'fulltext', 'spatial'];
@@ -18,8 +25,19 @@ function checkTables(tables) {
     });
   });
 
-  /** Check that the field value is valid */
+  /**
+   * Check that the field value is valid
+   * @param {string} tableName The name of the table
+   * @param {string} field The column to check
+   * @param {any} value The value to check
+   * @throws Throws an error if the table cannot accept this value for this column
+   **/
   function checkField(tableName, field, value) {
+
+    /**
+     * Check that a column is correctly defined
+     * @param {import('./utils').Column} columnParams The column to check
+     */
     function checkConsistency({type, length, unsigned, notNull, defaultValue}) {
 
       //Is the type supported
@@ -39,14 +57,15 @@ function checkTables(tables) {
         case 'binary':
         case 'varbinary':
         case 'text': {
-          if(length && parseInt(length,10)!=length) throw new Error(`${field} in ${tableName} expected an integer after the / but we reveived ${length}`);
+          if(length && parseInt(length + '',10)!=length) throw new Error(`${field} in ${tableName} expected an integer after the / but we reveived ${length}`);
           break;
         }
         case 'double':
         case 'decimal':
         case 'float': {
           if(length) {
-            const [s,d] = length.split(',');
+            const [s,d] = (length + '').split(',');
+            // @ts-ignore
             if(!d || parseInt(s,10)!=s || parseInt(d,10)!=d) throw new Error(`${field} in ${tableName} expected a decimal parameter like 8,2 but we reveived ${length}`);
           }
           break;
@@ -115,7 +134,7 @@ function checkTables(tables) {
       if(!Array.isArray(value)) throw new Error(`Field 'notNull' in ${tableName} must be an array containing a list of string denoting the columns that should not accept null as a value.`);
       value.forEach(column => {
         if(!tables[tableName][column] && column!=='index' && column!=='notNull') throw new Error(`Column ${column} was referenced inside of field 'notNull' in table ${tableName} but it doen't exist in that table.`);
-        if(tables[tableName][column].notNull===false) throw new Error(`Column ${column} in table ${tableName} is marked both as nullable and notNull.`);
+        if(/** @type {import('./utils').Column} */(tables[tableName][column]).notNull===false) throw new Error(`Column ${column} in table ${tableName} is marked both as nullable and notNull.`);
       });
     }
 
@@ -148,7 +167,11 @@ function checkTables(tables) {
   }
 }
 
-/** Check that the database information are valid */
+/**
+ * Check that the database information are valid
+ * @param {import('./database').Database} data The database configuration
+ * @throws Throws an error if the database configuration is incorrect
+ **/
 function checkDatabase(data) {
   try {
     check(database, data);
@@ -157,13 +180,25 @@ function checkDatabase(data) {
   }
 }
 
-/** Check that the rules are valid */
+/**
+ * Check that the rules are valid
+ * @param {import('./accessControl').Rules} rules The rules to check
+ * @param {import('./utils').TablesDeclaration} tables The tables as they were declared
+ **/
 function checkRules(rules, tables) {
-  function checkRule(value, possibleValues, ruleName) {
+
+  /**
+   * Ensure that a rule is valid for a table.
+   * @param {import('./accessControl').ColumnRule} value The rule to analyse 
+   * @param {('read' | 'write' | 'add' | 'remove')[]} possibleValues The instructions that can be restricted
+   * @param {string} column The rule being studied
+   * @throws Throws an error if the rule doesn't respect the schema of a Rule
+   */
+  function checkRule(value, possibleValues, column) {
     try {
       return check(possibleValues.reduce((model, key) => ({...model, [key] : 'function'}), {strict: true}), value);
     } catch(err) {
-      throw new Error(`We expect rule ${ruleName} to receive function parameters for keys ${JSON.stringify(possibleValues)}, but we received ${stringify(value)}`);
+      throw new Error(`We expect rule ${column} to receive function parameters for keys ${JSON.stringify(possibleValues)}, but we received ${stringify(value)}`);
     }
   }
   Object.keys(rules).forEach(key => {
@@ -172,18 +207,18 @@ function checkRules(rules, tables) {
     const { primitives, objects, arrays } = classifyData(table);
     const rule = rules[key];
     
-    Object.keys(rule).forEach(ruleName => {
-      const value = rule[ruleName];
-      if(table[ruleName]) {
-        if(primitives.includes(ruleName)) return checkRule(value, ['read', 'write'], ruleName);
-        if(objects.includes(ruleName)) return checkRule(value, ['read', 'write'], ruleName);
-        if(arrays.includes(ruleName)) return checkRule(value, ['add', 'remove'], ruleName);
-        throw new Error(`This should not be possible. The issue occured with the rule ${ruleName} for table ${key}.`);
+    Object.keys(rule).forEach(column => {
+      const value = rule[column];
+      if(table[column]) {
+        if(primitives.includes(column)) return checkRule(value, ['read', 'write'], column);
+        if(objects.includes(column)) return checkRule(value, ['read', 'write'], column);
+        if(arrays.includes(column)) return checkRule(value, ['add', 'remove'], column);
+        throw new Error(`This should not be possible. The issue occured with the rule ${column} for table ${key}.`);
       } else {
         const instructions = ['read', 'write', 'create', 'delete'];
-        if(!instructions.includes(ruleName)) throw new Error(`You defined a rule for ${ruleName} which is not defined in the table ${key}`);
+        if(!instructions.includes(column)) throw new Error(`You defined a rule for ${column} which is not defined in the table ${key}`);
         if(value instanceof Function) return;
-        throw new Error(`The rule ${ruleName} for table ${key} has to be a function.`);
+        throw new Error(`The rule ${column} for table ${key} has to be a function.`);
       }
     });
   });
@@ -194,7 +229,12 @@ function checkRules(rules, tables) {
   });
 }
 
-/** Check that all provided plugins are well formed. */
+/**
+ * Check that all provided plugins are well formed.
+ * @param {import('./plugins').Plugin[]} plugins The list of the plugins to check
+ * @param {import('./utils').TablesDeclaration} tables The tables as they were declared
+ * @throws Throws an error if one of the plugin doesn't meet its prerequisite
+ **/
 function checkPlugins(plugins, tables) {
   const pluginKeys = ['middleware', 'onRequest', 'onProcessing', 'onCreation', 'onDeletion', 'onResult', 'onUpdate', 'onListUpdate', 'onError', 'onSuccess', 'preRequisite', 'errorHandler'];
   if(!Array.isArray(plugins)) throw new Error(`plugins should be an array. But we received ${JSON.stringify(plugins)}.`);
@@ -215,6 +255,18 @@ function checkPlugins(plugins, tables) {
   });
 }
 
+/**
+ * @typedef {Object} SimpleQLParams
+ * @property {import('./utils').TablesDeclaration} tables 
+ * @property {import('./database').Database} database
+ * @property {import('./accessControl').Rules} rules
+ * @property {import('./plugins').Plugin[]} plugins
+ */
+
+/**
+ * Check that the simpleQL parameters are valid
+ * @param {SimpleQLParams} simplqlParams The object to check
+ */
 module.exports = ({tables, database, rules, plugins}) => {
   try {
     checkTables(tables);

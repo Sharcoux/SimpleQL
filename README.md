@@ -116,3 +116,4 @@ In one request, we are getting all the messages from `user2@email.com` published
 ### [Adding plugins](docs/plugins.md)
 ### [Requesting your database](docs/requests.md)
 ### [Server options](docs/options.md)
+### [Testing](https://github.com/Sharcoux/simple-ql-testing)

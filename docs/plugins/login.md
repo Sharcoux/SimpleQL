@@ -61,7 +61,7 @@ const request = {
 You will receive a SimpleQL response of this type
 
 ```javascript
-{
+const request = {
   User : {
     email : 'myLogin',
     jwt : 'jwt token',
@@ -89,7 +89,7 @@ This is how you can enable Google and Facebook authentication:
 This is how you can log in a user with Facebook:
 
 ```javascript
-{
+const request = {
   User : {
     login : '<facebook userId>',
     facebookToken : '<facebook access token>',
@@ -100,7 +100,7 @@ This is how you can log in a user with Facebook:
 This is how you can sign in a user with Google:
 
 ```javascript
-{
+const request = {
   User : {
     googleToken : '<google access token>',
     create: true,
@@ -132,3 +132,62 @@ Here are the other parameters:
 See the details at [jsonwebtoken website](https://github.com/auth0/node-jsonwebtoken)
 
 Generated jwts will include an iat (issued at) claim by default unless noTimestamp is specified. If iat is inserted in the payload, it will be used instead of the real timestamp for calculating other things like exp given a timespan in options.expiresIn.
+
+## Authentication on another route
+
+To authenticate a user on a separated route, you can use the plugin middleware:
+
+```javascript
+
+const express = require('express')
+const { plugins: { loginPlugin } } = require('simple-ql')
+
+const app = express();
+
+const LoginPlugin = loginPlugin({
+    login: 'email',
+    password: 'password',
+    salt: 'salt',
+    userTable: 'User',
+  })
+const plugins = [LoginPlugin]
+app.use('my-other-route', LoginPlugin.middleware)
+...
+```
+
+You can now read the current user id in `res.locals.authId`:
+
+```javascript
+app.post('my-other-route', (req, res, next) => {
+  const userId = res.locals.authId
+})
+```
+
+## Renew jwt token
+
+To receive a new jwt token, just ask for one in the request:
+
+```javascript
+const request = {
+  User : {
+    login : '<login>',
+    get: ['jwt']
+  }
+}
+```
+
+## Edit password
+
+To edit the password, you will need to provide the previous password, unless the request is passed with admin rights:
+
+```javascript
+const request = {
+  User : {
+    login : '<login>',
+    password: '<current password>',
+    set: {
+      password: '<new password>'
+    }
+  }
+}
+```

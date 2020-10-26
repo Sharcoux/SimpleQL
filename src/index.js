@@ -1,3 +1,5 @@
+// @ts-check
+
 const createDatabase = require('./database');
 const errors = require('./errors');
 const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, DATABASE_ERROR, FORBIDDEN, UNAUTHORIZED, WRONG_PASSWORD, ACCESS_DENIED, CONFLICT, REQUIRED } = errors;
@@ -7,9 +9,24 @@ const bodyParser = require('body-parser');
 const log = require('./utils/logger');
 const plugins = require('./plugins');
 const { stringify } = require('./utils');
-const RateLimit = require('express-rate-limit');
+const rateLimit = require('express-rate-limit');
 
+/**
+ * @callback Query
+ * @param {import('./utils').Request} query The SimpleQL request
+ * @param {string | number=} authId The id for the user making the request. If not provided, uses admin rights.
+ * @returns {Promise<import('./utils').Result>} The results of the SimpleQl request
+ **/
+
+/**
+ * This will store, for each database created, a promise that will resolve once the database is ready to be queried
+ * @type {Object.<string, Promise<Query>>}
+ **/
 const dbQuery = {};
+/**
+ * This will queue promises to ensure that every request waits for the previous query to resolve before starting a new one
+ * @type {Object.<string, Promise<import('./utils').Result>>}
+ */
 const dbQueryStack = {};
 const getQuery = db => dbQuery[db] || Promise.reject(`No database were created with name ${db}.`);
 
@@ -19,10 +36,37 @@ module.exports = {
   errors,
   plugins,
   getQuery,
+  /**
+   * @param {{}} tables The global object that will hold the tables
+   * @returns {any} An object that can be destructurated
+   */
   modelFactory: tables => new Proxy(tables, { get: (target, name) => (target[name] = {}) } )
 };
 
-function createServer({tables = {}, database = {}, rules = {}, plugins = [], middlewares = [], app}, { root = '/', sizeLimit = '5mb', requestPerMinute = 1000 } = {}) {
+/**
+ * @typedef {Object} SimpleQLParams
+ * @property {import('./utils').TablesDeclaration} tables The database tables (see [Tables](./docs/tables.md))
+ * @property {import('./database').Database} database The database configuration (see [Database](./docs/database.md))
+ * @property {import('./accessControl').Rules} rules The rules to control access to the data (see [Rules](./docs/access.md))
+ * @property {import('express').RequestHandler[]} middlewares As many express middleware as desired
+ * @property {import('./plugins').Plugin[]} plugins The list of Simple QL plugins to use
+ * @property {import('express').Express} app The express app
+ */
+
+/**
+  * @typedef {Object} ServerParams
+  * @property {string=} root The root app (default: '/')
+  * @property {string=} sizeLimit The limit size of requests (default: '5mb')
+  * @property {number=} requestPerMinute The maximum allowed request per minutes (default: 1000)
+  */
+ 
+/**
+ * Create the SimpleQL server
+ * @param {SimpleQLParams} simpleQlParams Simple QL parameters 
+ * @param {ServerParams} serverParams Server parameters
+ * @returns {Promise<Query>} Returns a promise that resolves with a function to query the database
+ */
+async function createServer({tables = {}, database, rules = {}, plugins = [], middlewares = [], app}, { root = '/', sizeLimit = '5mb', requestPerMinute = 1000 } = {}) {
   const allMiddlewares = plugins.map(plugin => plugin.middleware).filter(mw => mw).concat(middlewares);
   const errorHandlers = plugins.map(plugin => plugin.errorHandler).filter(mw => mw);
   errorHandlers.push(defaultErrorHandler);
@@ -31,14 +75,17 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
   if(!root.startsWith('/')) return Promise.reject('root parameter should start with \'/\' and denote the path SimplQL server should listen to');
   //Create the promise to get the query function to make requests to the database from the server
   const databaseName = database.database;
+  /** @type {(query: Query) => void} */
   let dbReady = () => {};//Callback when the db is ready
+  /** @type {(error: any) => void} */
   let dbReject = () => {};//Callback if the db failed
   if(database && databaseName && Object(databaseName) instanceof String) {
+    // Creates, for the database, a promise that will resolve only once the db is ready
     dbQuery[databaseName] = new Promise((resolve, reject) => {dbReady = resolve;dbReject = reject;});
-    dbQueryStack[databaseName] = dbQuery[databaseName];//This promise is resolved each time the db is available for requests
+    // We initialize the stack with a promise that will resolve once the database is ready
+    dbQueryStack[databaseName] = dbQuery[databaseName].then(() => ({}));
   }
 
-  //Check data
   return checkParameters({tables, database, rules, plugins})
     //Create the database
     .then(() => createDatabase({tables, database, rules, plugins}))
@@ -50,7 +97,7 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
       app.use(root, bodyParser.json({ limit: sizeLimit }));
       //Limit amount of requests handled
       if(requestPerMinute) {
-        const apiLimiter = new RateLimit({
+        const apiLimiter = rateLimit({
           windowMs: 60*1000, // 1 minute
           max: requestPerMinute,
         });
@@ -65,8 +112,9 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
       //Final error handler, ditching error
       app.use(root, (err, req, res, next) => next());
       log('info', 'Simple QL server ready!');
-      //Enable server side requests by providint a query function.
+      //Enable server side requests by providing a query function.
       //We make sure that the previous request is over before it is possible to make a new one.
+      /** @type {Query} */
       const dbQuery = (query, authId = database.privateKey) => dbQueryStack[databaseName] = dbQueryStack[databaseName].catch(() => {}).then(() => requestHandler(authId, query));
       dbReady(dbQuery);
       return dbQuery;
@@ -77,9 +125,13 @@ function createServer({tables = {}, database = {}, rules = {}, plugins = [], mid
     });
 }
 
-/** The middleware in charge of treating simpleQL requests */
+/**
+ * The middleware in charge of treating simpleQL requests
+ * @param {string} databaseName The name of the database to create
+ * @returns {import('express').RequestHandler} Returns an express middleware
+ **/
 function simpleQL(databaseName) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const authId = res.locals.authId;
     //We forward the request to the database
     getQuery(databaseName)
@@ -92,8 +144,11 @@ function simpleQL(databaseName) {
   };
 }
 
-/** The default handler for simpleQL errors */
-function defaultErrorHandler(err, req, res, next) {//eslint-disable-line no-unused-vars
+/**
+ * The default express error handler for simpleQL errors
+ * @type {import('express').ErrorRequestHandler}
+ **/
+function defaultErrorHandler(err, _req, res, next) {
   if(Object(err.status) instanceof Number) {
     res.writeHead(err.status);
     err.message ? res.end(err.message) : res.json(err);

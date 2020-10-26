@@ -1,3 +1,5 @@
+// @ts-check
+
 /** Security Plugin. Check the documentation **/
 const { security : securityModel } = require('../utils/types');
 const check = require('../utils/type-checking');
@@ -5,6 +7,14 @@ const log = require('../utils/logger');
 const { getOptionalDep } = require('../utils');
 const fs = require('fs');
 const path = require('path');
+
+/**
+ * @typedef {Object} SecurityPluginConfig
+ * @property {import('express').Express} app The express app
+ * @property {string[]} domains The domain this server should be hosted on
+ * @property {string} emailACME The email of the person responsible for the domain
+ * @property {Object=} helmet The helmet configuration
+ */
 
 const createSecurityPlugin = config => {
   check(securityModel, config);
@@ -36,7 +46,7 @@ const createSecurityPlugin = config => {
   });
 
   //Read the current config file
-  const configRawContent = fs.readFileSync(path.normalize(path.join(packageRoot, configDir, 'config.json')));
+  const configRawContent = fs.readFileSync(path.normalize(path.join(packageRoot, configDir, 'config.json')), 'utf8');
 
   //Update sites with available data if exist
   let configFile = { sites };
@@ -49,7 +59,7 @@ const createSecurityPlugin = config => {
   }
 
   //Write the updated file content
-  fs.writeFileSync(path.normalize(path.join(packageRoot, configDir, 'config.json')), JSON.stringify(configFile, null, 4));
+  fs.writeFileSync(path.normalize(path.join(packageRoot, configDir, 'config.json')), JSON.stringify(configFile, null, 4),  'utf8');
 
   greenlock.init({
     packageRoot,

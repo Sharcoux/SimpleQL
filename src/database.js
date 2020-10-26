@@ -1,48 +1,97 @@
+// @ts-check
+
 /** This is the core of SimpleQL where every request is cut in pieces and transformed into a query to the database */
 const { isPrimitive, toType, classifyRequestData, operators, sequence, stringify, filterObject } = require('./utils');
 const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, DATABASE_ERROR, WRONG_VALUE } = require('./errors');
 const { prepareTables, prepareRules } = require('./prepare');
 const log = require('./utils/logger');
 
-/** Load the driver according to database type, and create the database connection, and the database itself if required */
-function createDatabase({tables, database, rules = {}, plugins = []}) {
+/**
+ * Database configuration
+ * @typedef {Object} Database
+ * @property {string} user The login to access your database
+ * @property {string} password The password to access your database
+ * @property {string} password The database type that you wish to be using
+ * @property {'mysql'} type The database type. For now only 'mysql' is available
+ * @property {string} privateKey A private key that will be used to identify requests that can ignore access rules
+ * @property {string} host The database server host
+ * @property {string} database The name of your database
+ * @property {boolean=} create True if you want to overwrite any pre-existing database with this name
+ */
+
+/**
+ * A function able to execute a request to the database
+ * @callback RequestHandler
+ * @param {number | string} authId The id identifying the user doing the request
+ * @param {import('./utils').Request} request The SimpleQL request
+ * @returns {Promise<import('./utils').Result>} The request results
+ */
+
+/**
+ * @typedef {Object} DatabaseParams
+ * @property {import('./utils').TablesDeclaration} tables The tables as they were declared
+ * @property {Database} database The database configuration
+ * @property {import('./accessControl').Rules} rules The access rules for the database
+ * @property {import('./plugins').Plugin[]} plugins The SimpleQL plugins
+ */
+
+/**
+ * Load the driver according to database type, and create the database connection, and the database itself if required
+ * @param {DatabaseParams} databaseParams The configuration of the database
+ * @returns {Promise<RequestHandler>} A function able to execute a request to the database
+ **/
+async function createDatabase({tables, database, rules = {}, plugins = []}) {
   const { type, privateKey, create } = database;
 
   //Load the driver dynamically
+  /** @type {import('./drivers/template').CreateDriver} */
   const createDriver = require(`./drivers/${type}`);
   if(!createDriver) return Promise.reject(`${type} is not supported right now. Try mysql for instance.`);
   //create the driver to the database
   return createDriver(database)
     .then(driver => createTables({driver, tables, create})
-      .then(tablesModel => createRequestHandler({tables, rules, tablesModel, plugins, driver, privateKey}))
-      .then(requestHandler => {
+      .then(({ tablesModel, tables: updatedTables }) => {
         //We pre-configure the rules for this database
-        prepareRules({rules, tables, privateKey});
+        const preparedRules = prepareRules({rules, tables: updatedTables});
+        const requestHandler = createRequestHandler({tables: updatedTables, rules: preparedRules, tablesModel, plugins, driver, privateKey});
         //We check if the pre-requesites required by the plugins are met
-        return Promise.all(plugins.filter(plugin => plugin.preRequisite).map(plugin => plugin.preRequisite(tables)))
+        return Promise.all(plugins.filter(plugin => plugin.preRequisite).map(plugin => plugin.preRequisite(updatedTables)))
           //We return the fully configured request handler
           .then(() => requestHandler);
       })
     );
 }
 
+/**
+ * @typedef {Object} CreateRequestHandlerParams 
+ * @property {import('./utils').FormattedTablesDeclaration} tables The tables as they were declared (without shorthand values)
+ * @property {import('./accessControl').PreparedRules} rules The access rules for the database
+ * @property {import('./utils').Tables} tablesModel The tables as they will appear in the database
+ * @property {import('./drivers/template')} driver The driver to communicate with the database
+ * @property {import('./plugins').Plugin[]} plugins The SimpleQL plugins
+ * @property {string} privateKey A private key that will be used to identify requests that can ignore access rules
+ */
+
+/**
+ * Create the request handler to make request to the database
+ * @param {CreateRequestHandlerParams} requestHandlerParams 
+ * @returns {RequestHandler} Returns the request handler
+ */
 function createRequestHandler({tables, rules, tablesModel, plugins, driver, privateKey}) {
   let inTransaction = false;
   return request;
 
   /**
    * Generate a transaction, resolve the provided simple-QL request, and terminate the transaction.
-   * @param {String} authId The requester identifier to determine access rights
-   * @param {Object} request The full request
-   * @param {Object} local An object containing all parameters persisting during the whole request resolving process
-   * @returns {Object} The full result of the request
+   * @type {RequestHandler}
    */
-  function request(authId, request) {
+  async function request(authId, request) {
     if(!request) return Promise.reject(`The request is ${request}. You probably forgot to indicate the first parameter: authId. This parameter determines the access rights. It should be set to database.privateKey for admin rights, undefined for public rights, or to a user Id to simulate this user's credentials.`);
     if(inTransaction) return Promise.reject('A transaction is already in progress. You should not be calling this method right now. Check the documentation about plugins tu see how you can request your database within a plugin method.');
     //We cache the requests made into the database
     const cache = {};
     //These data may be updated during the request
+    /** @type {import('./plugins').Local} */
     const local = { authId };
     //We start a transaction to resolve the request
     return driver.startTransaction()
@@ -68,18 +117,19 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
     /** 
      * Function needed to query the database from rules or plugins.
      * Function provided to execute SimpleQL requests into the database, potentially with admin rights
+     * @type {import('./utils').QueryFunction}
      **/
-    function query(request, { readOnly, admin } = { readOnly : false, admin : false }) {
+    async function query(request, { readOnly, admin } = { readOnly : false, admin : false }) {
       return resolve(request, { authId : admin ? privateKey : local.authId, readOnly });
     }
     
     /**
      * Resolve a full simple-QL request
-     * @param {Object} local An object containing all parameters persisting during the whole request resolving process
-     * @param {Object} request The full request
-     * @returns {Object} The full result of the request
+     * @param {import('./plugins').Local} local An object containing all parameters persisting during the whole request resolving process
+     * @param {import('./utils').Request} request The full request
+     * @returns {Promise<import('./utils').Result>} The full result of the request
      */
-    function resolve(request, local = {}) {
+    async function resolve(request, local) {
       //We keep only the requests where objects requested are described inside a table
       const keys = Object.keys(request).filter(key => tables[key]);
       return sequence(keys.map(key => () => resolveInTable({tableName : key, request : request[key], local})))
@@ -88,12 +138,11 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
     }
 
     /**
-       * Resolve the provided local request for the specified table, including creation or deletion of elements.
-       * @param {String} tableName the name of the table to look into
-       * @param {Object} request the request relative to that table
-       * @returns {Object} The result of the local (partial) request
-       */
-    function resolveInTable({tableName, request, parentRequest, local}) {
+     * Resolve the provided local request for the specified table, including creation or deletion of elements.
+     * @param {{ tableName: string; request: import('./utils').Request; parentRequest?: import('./utils').Request; local: import('./plugins').Local}} tableName the name of the table to look into
+     * @returns {Promise<import('./utils').Element[]>} The result of the local (partial) request
+     */
+    async function resolveInTable({tableName, request, parentRequest, local}) {
       if(!request) console.error(new Error(`The request was empty in resolveInTable() for table ${tableName}.`));
       if(!request) return Promise.reject({
         name: BAD_REQUEST,
@@ -106,9 +155,16 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           .then(results => [].concat(...results));
       }
 
-      function pluginCall(data, event) {
+      /**
+       * Call
+       * @param {import('./utils').Request | Object | import('./utils').Element[]} data The data this plugin should be called with 
+       * @param {'onRequest' | 'onCreation' | 'onDeletion' | 'onProcessing' | 'onUpdate' | 'onListUpdate' | 'onResult'} event The event that originated this call
+       * @returns {Promise<any>}
+       */
+      async function pluginCall(data, event) {
         //Function provided to edit local request parameters (authId, readOnly) during the request
         log('resolution part title', event, tableName);
+        // @ts-ignore
         return sequence(plugins
           //Read the callback for the event in this table for each plugin
           .map(plugin => plugin[event] && plugin[event][tableName])
@@ -123,39 +179,64 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
 
 
 
-      /** This will handle a request workflow for a single table */
-      function resolveRequest({tableName, request: initialRequest, parentRequest}) {
+      /**
+       * This will handle a request workflow for a single table
+       * @param {{ tableName: string; request: import('./utils').Request; parentRequest?: import('./utils').Request }} resolveRequestParams
+       * @returns {Promise<import('./utils').Element[]>}
+       **/
+      async function resolveRequest({tableName, request: initialRequest, parentRequest}) {
         log('resolution part', 'treating : ', tableName, JSON.stringify(initialRequest));
 
         //Classify the request into the elements we will need
         const table = tables[tableName];
         const {request, search, primitives, objects, arrays} = classifyRequestData(initialRequest, table);
 
-        //Function used to execute a request into the database tables
-        function applyInTable(req, tName) {
+        /**
+         * Apply a partial request in a table
+         * @param {import('./utils').Request} req The partial request to apply
+         * @param {string} tName Table name
+         * @returns {Promise<import('./utils').Element[]>} The results of the partial request
+         */
+        async function applyInTable(req, tName) {
           return resolveInTable({tableName : tName || tableName, request : req, parentRequest : {...request, tableName, parent : parentRequest}, local});
         }
 
         if(!cache[tableName]) cache[tableName] = {};
+        /**
+         * Save data we found on every elements during the request to give faster results
+         * @param {import('./utils').Element} elt The element to cache
+         */
         function addCache(elt) {
           if(!cache[tableName][elt.reservedId]) cache[tableName][elt.reservedId] = {};
           //We add the primitive content to the cache.
           Object.keys(elt).forEach(key => cache[tableName][elt.reservedId][key] = elt[key]);
         }
+        /**
+         * Remove the cached data for the specified element
+         * @param {import('./utils').Element} elt 
+         */
         function uncache(elt) {
           delete cache[tableName][elt.reservedId];
         }
-        function readCache(elt, properties) {
-          const cached = elt && cache[tableName][elt.reservedId];
+        /**
+         * Read the data we have stored about the provided element
+         * @param {string | number} reservedId The id of the element we are trying to get data about
+         * @param {string[]} properties The column we want to read from the cache
+         * @returns {import('./utils').Element | undefined} The data we found about the object
+         */
+        function readCache(reservedId, properties) {
+          const cached = reservedId && cache[tableName][reservedId];
           if(!cached) return;
+          // If some data were invalidated, we give up reading the cache as it might be outdated
           if(properties.find(key => cached[key]===undefined)) return;
-          const result = {};
+          const result = { reservedId };
+          // We read from the cache the data we were looking for.
           properties.forEach(key => result[key] = cached[key]);
           return result;
         }
 
         //We will resolve the current request within the table, including creation or deletion of elements.
-        return integrityCheck().then(() => {
+        return integrityCheck().then(async () => {
         //We look for objects matching the objects constraints
           return Promise.resolve().then(() => {
           //Create and delete requests are ignored if readOnly is set
@@ -193,16 +274,34 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             });
         });
 
-        function integrityCheck() {
+        /**
+         * Ensure that the request has a valid shape
+         * @returns {Promise<void>} Resolves if the request is valid
+         */
+        async function integrityCheck() {
           //If this request is authenticated with the privateKey, we don't need to check integrity.
           if(local.authId === privateKey) return Promise.resolve();
 
           log('resolution part title', 'integrityCheck');
 
-          /** Check if the values in the request are acceptable. */
+          /**
+           * Check if the values in the request are acceptable.
+           * @param {import('./utils').Request} req The request to analyse
+           * @param {string[]} primitives The array of primitive keys corresponding to existing column tables
+           * @param {string[]} objects The array of object keys corresponding to existing foreign keys
+           * @param {string[]} arrays The array of arrays keys corresponding to existing association tables
+           * @returns {boolean} True if valid, false otherwise.
+           * @throws Throws an error if the request is malformed
+           **/
           function checkEntry(req, primitives, objects, arrays) {
 
-            /** Check if the value is acceptable for a primitive */
+            /**
+             * Check if the value is acceptable for a primitive
+             * @param {any} value The value to check
+             * @param {string} key The column name this value is relative to
+             * @returns {boolean} True if valid, false otherwise.
+             * @throws Throws an error if the request is malformed
+             **/
             function isValue(value, key) {
               if(value===null) return true;
               if(isPrimitive(value)) return true;
@@ -213,17 +312,38 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
               throw `Bad value ${value} provided for field ${key} in table ${tableName}. We expect null, a ${tablesModel[key].type}, an object, or an array of these types.`;
             }
 
-            /** Check if the value is acceptable for an object or an array */
+            /**
+             * Check if the value is acceptable for an object or an array
+             * @param {any} value The value to check
+             * @param {string} key The column name this value is relative to
+             * @returns {boolean} True if valid, false otherwise.
+             * @throws Throws an error if the request is malformed
+             **/
             function isObject(value, key) {
               if(value!==null && isPrimitive(value)) throw `Bad value ${value} provided for field ${key} in table ${tableName}. We expect null, an object, or an array of these types.`;
+              return true;
             }
 
             //Check if the values are acceptable for primitives, objects and arrays
             return primitives.every(key => isValue(req[key], key))
               && [...objects, ...arrays].every(key => isObject(req[key], key));
           }
+          /**
+           * Ensure that the types of each value are matching the column type
+           * @param {string[]} keys The keys to check
+           * @param {Object.<string, any>} values The values associated to those keys
+           * @param {import('./utils').Table} model The data model where we can check the expected type
+           * @returns {string} True if the value is
+           */
           function wrongType(keys, values, model) {
             return keys.find(key => !isTypeCorrect(key, values[key], model[key].type));
+            /**
+             * Ensure that the types of each value are matching the column type
+             * @param {string} key The key to check
+             * @param {any} value The values associated to this keys
+             * @param {import('./utils').ColumnType} type The data model where we can check the expected type
+             * @returns {boolean} True if the value is
+             */
             function isTypeCorrect(key, value, type) {
               if(value===undefined || value===null) return !model[key].notNull;
               switch(type) {
@@ -242,7 +362,8 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                   return !Number.isNaN(value);
                 case 'date':
                 case 'dateTime':
-                  return (Object(value) instanceof Date) || !isNaN(new Date(value));
+                  // isNaN(Data) makes it possible to check if a date is valid
+                  return (Object(value) instanceof Date) || !isNaN(/** @type {any} **/(new Date(value)));
                 case 'boolean':
                   return Object(value) instanceof Boolean;
                 case 'binary':
@@ -300,19 +421,24 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           }
         }
 
-        /** We look for objects that match the request constraints and store their id into the key+Id property and add the objects into this.resolvedObjects map */
-        function getObjects() {
+        /** 
+         * We look for objects that match the request constraints and store their id into the key+Id property
+         * and add the objects into this.resolvedObjects map
+         * @returns {Promise<void>}
+         **/
+        async function getObjects() {
           log('resolution part title', 'getObjects');
           //We resolve the children objects
           return sequence(objects.map(key => () => {
             //If we are looking for null value...
             if(!request[key]) {
               request[key] = null;
-              return Promise.resolve();
+              return Promise.resolve([]);
             }
             else {
-            //We get the children id and define the key+Id property accordingly
-              return applyInTable(request[key], table[key].tableName).then(result => {
+              const column = /** @type {import('./utils').TableValue} */(table[key]);
+              //We get the children id and define the key+Id property accordingly
+              return applyInTable(request[key], column.tableName).then(result => {
                 if(result.length===0 && request[key].required) return Promise.reject({
                   name: NOT_FOUND,
                   message: `Nothing found with these constraints : ${tableName}->${key}->${JSON.stringify(request[key])}`,
@@ -324,26 +450,30 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                 else request[key] = result[0];
               });
             }
-          }));
+          })).then(() => {});
         }
 
         /** Filter the results that respond to the arrays constraints. **/
-        function getChildrenArrays() {
+        async function getChildrenArrays() {
           log('resolution part title', 'getChildrenArrays');
           return sequence(arrays.map(key =>
           //We resolve queries about arrays
             () => applyInTable(request[key], table[key][0].tableName)
               .then(arrayResults => request[key] = arrayResults)
-          ));
+          )).then(() => {});
         }
 
-        /** Insert elements inside the table if request.create is defined */
-        function create() {
-          if(!request.create) return Promise.resolve();
+        /**
+         * Insert elements inside the table if request.create is defined
+         * @returns {Promise<import('./utils').Element[]>} The objects created or an empty list
+         **/
+        async function create() {
+          if(!request.create) return Promise.resolve([]);
           log('resolution part title', 'create');
           //TODO gérer les références internes entre créations (un message et un feed par exemple ? un user et ses contacts ?)
           return getObjects().then(getChildrenArrays).then(() => {
-            const element = {};
+            /** @type {import('./utils').Element} **/
+            const element = { reservedId: undefined };
             //FIXME : we should be able to create more than one object if necessary
             //Make sure we cannot create more than one object at a time
             const array = primitives.find(key => Array.isArray(request[key]));
@@ -385,8 +515,11 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           });
         }
 
-        /** Look into the database for objects matching the constraints. */
-        function get() {
+        /**
+         * Look into the database for objects matching the constraints.
+         * @returns {Promise<import('./utils').Element[]>} The request results
+         **/
+        async function get() {
           log('resolution part title', 'get');
           if(!search.includes('reservedId')) search.push('reservedId');
           //Create the where clause
@@ -407,15 +540,15 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           });
           if(impossible) return Promise.resolve([]);
           //We try to read the data from the cache
-          const cachedData = readCache(request, search);
+          const cachedData = readCache(request.reservedId, search);
           if(cachedData) return Promise.resolve([cachedData]);
           return driver.get({
             table : tableName,
             //we will need the objects ids to retrieve the corresponding objects
             search : searchKeys,
             where,
-            limit : request.limit,
-            offset : request.offset,
+            limit : parseInt(/** @type {any} **/(request.limit), 10),
+            offset : parseInt(/** @type {any} **/(request.offset), 10),
             order: request.order,
           })
           //We add the date to the cache as they were received from the database
@@ -430,7 +563,12 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
         // });
         }
 
-        function resolveObjects(results) {
+        /**
+         * We will now read the data of the objects we previously mapped to the results
+         * @param {import('./utils').Element[]} results The current results
+         * @returns {Promise<import('./utils').Element[]>} The updated results
+         */
+        async function resolveObjects(results) {
           log('resolution part title', 'resolveObjects');
           return sequence(objects.map(key => () => sequence(results.map(result => () => {
             //If we are looking for null values, no need to query the foreign table.
@@ -438,8 +576,9 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
               request[key] = null;
               return Promise.resolve();
             }
+            const foreignTable = /** @type {import('./utils').TableValue} **/(table[key]);
             request[key].reservedId = result[key+'Id'];
-            return applyInTable(request[key], table[key].tableName).then(objects => {
+            return applyInTable(request[key], foreignTable.tableName).then(objects => {
               if(objects.length===0 && request[key].required) {
                 return Promise.reject({
                   name: NOT_FOUND,
@@ -448,19 +587,22 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
               }
               else if(objects.length>1) return Promise.reject({
                 name: DATABASE_ERROR,
-                message: `We found more than one object for key ${key} with the id ${result[key+'Id']} in table ${table[key].tableName}`,
+                message: `We found more than one object for key ${key} with the id ${result[key+'Id']} in table ${foreignTable.tableName}`,
               });
               else {
                 delete result[key+'Id'];
                 result[key] = objects[0];
-                return result;
               }
             });
           })))).then(() => results);
         }
 
-        /** Filter the results that respond to the arrays constraints. **/
-        function resolveChildrenArrays(results) {
+        /**
+         * Filter the results that respond to the arrays constraints.
+         * @param {import('./utils').Element[]} results The current results
+         * @returns {Promise<import('./utils').Element[]>} The updated results
+         **/
+        async function resolveChildrenArrays(results) {
           log('resolution part title', 'resolveChildrenArrays');
           //We keep only the arrays constraints that are truly constraints. Constraints that have keys other than 'add' or 'remove'.
           const realArrays = arrays.filter(key => request[key] && Object.keys(request[key]).find(k => !['add', 'remove'].includes(k)));
@@ -486,8 +628,12 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             .then(() => results.filter(result => realArrays.every(key => !request[key].required || result[key].length)));
         }
 
-        /** Remove elements from the table if request.delete is defined */
-        function remove(results) {
+        /**
+         * Remove elements from the table if request.delete is defined
+         * @param {import('./utils').Element[]} results The current results
+         * @returns {Promise<import('./utils').Element[]>} The updated results
+         */
+        async function remove(results) {
           if(!request.delete) return Promise.resolve(results);
           log('resolution part title', 'delete');
           //If there is no results, there is nothing to delete
@@ -504,8 +650,12 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             .then(() => results);
         }
     
-        /** Change the table's values if request.set is defined */
-        function update(results) {
+        /**
+         * Change the table's values if request.set is defined
+         * @param {import('./utils').Element[]} results The current results
+         * @returns {Promise<import('./utils').Element[]>} The updated results
+         */
+        async function update(results) {
           if(!request.set) return Promise.resolve(results);
           if(!results.length) return Promise.resolve(results);
           log('resolution part title', 'update');
@@ -516,6 +666,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           const currentValues = {};
           const updatedKeys = [...primitivesSet, ...objectsSet];
           results.forEach(result => currentValues[result.reservedId] = filterObject(result, updatedKeys));
+          /** @type {Object.<string, string | number>} */
           const values = {}; // The values to be edited
           const removed = {};//The elements that have been removed
           const added = {};//The elements that have been added
@@ -530,7 +681,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
           results.forEach(addCache);
           //Find the objects matching the constraints to be replaced
           return sequence(objectsSet.map(key =>
-            () => applyInTable(request.set[key], table[key].tableName)
+            () => applyInTable(request.set[key], /** @type {import('./utils').TableValue} **/(table[key]).tableName)
               .then(matches => {
                 if(matches.length===0) return Promise.reject({
                   name: NOT_SETTABLE,
@@ -587,7 +738,12 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             .then(() => results);
         }
 
-        function updateChildrenArrays(results) {
+        /**
+         * If we are using 'add' or 'remove' instruction on an associated table, we cut the link between the objects
+         * @param {import('./utils').Element[]} results The current results
+         * @returns {Promise<import('./utils').Element[]>} The updated results
+         */
+        async function updateChildrenArrays(results) {
           log('resolution part title', 'updateChildrenArrays');
           if(!results.length) return Promise.resolve(results);
           const removed = {};
@@ -605,7 +761,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                       [tableName+'Id'] : results.map(result => result.reservedId),
                       [key+'Id'] : arrayResults.map(result => result.reservedId),
                     }
-                  }).then(() => removed[key] = arrayResults));
+                  }).then(() => {removed[key] = arrayResults;}));
               })
               //We add elements into the association table
               .then(() => {
@@ -630,8 +786,13 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
             .then(() => pluginCall({objects: results, added, removed}, 'onListUpdate'))
             .then(() => results);
         }
-    
-        function controlAccess(results) {
+        
+        /**
+         * Check if the request is respecting the access rules
+         * @param {import('./utils').Element[]} results The request results
+         * @returns {Promise<import('./utils').Element[]>} The request results filtered according to access rules
+         */
+        async function controlAccess(results) {
         //If this request is authenticated with the privateKey, we don't need to control access.
           if(local.authId === privateKey) return Promise.resolve(results);
           log('resolution part title', 'controlAccess');
@@ -676,7 +837,7 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
                       name : UNAUTHORIZED,
                       message : `You are not allowed to edit field ${key} in table ${tableName}. Error : ${err.message || err}`
                     }))
-                  ));
+                  )).then(() => {});
                 })
           
                 //Manage create instructions
@@ -737,20 +898,31 @@ function createRequestHandler({tables, rules, tablesModel, plugins, driver, priv
   }
 }
 
+/**
+ * The parameters of the createTables function
+ * @typedef {Object} CreateTableParams
+ * @property {import('./drivers/template')} driver The driver to communicate with the database
+ * @property {import('./utils').TablesDeclaration} tables The tables as they were declared
+ * @property {boolean=} create Should we clear any previous database with the same name?
+ */
 
-/** Create the table model that will be used for all requests */
-function createTables({driver, tables, create}) {
-  const data = prepareTables(tables);
+/**
+ * Create the table model that will be used for all requests and create the tables in the database
+ * @param {CreateTableParams} createTablesParam The data needed to create the tables
+ * @returns {Promise<{ tablesModel: import('./utils').Tables; tables: import('./utils').FormattedTablesDeclaration }>} Returns the formatted tables and the model
+ **/
+async function createTables({driver, tables, create}) {
+  const { tablesModel, tables: updatedTables } = prepareTables(tables);
   //We retrieve foreign keys from the prepared table. All tables need to be created before adding foreign keys
-  const foreignKeys = Object.keys(data).reduce((acc, tableName) => {
-    if(data[tableName].foreignKeys) acc[tableName] = data[tableName].foreignKeys;
-    delete data[tableName].foreignKeys;
+  const foreignKeys = Object.keys(tablesModel).reduce((acc, tableName) => {
+    if(tablesModel[tableName].foreignKeys) acc[tableName] = tablesModel[tableName].foreignKeys;
+    delete tablesModel[tableName].foreignKeys;
     return acc;
   }, {});
   //Create the tables if needed
-  return sequence(Object.keys(data).map(tableName => () => {
+  return sequence(Object.keys(tablesModel).map(tableName => () => {
     //We retrieve tables indexes from the prepared table
-    const columnData = data[tableName];
+    const columnData = tablesModel[tableName];
     const index = columnData.index;
     delete columnData.index;
     const tableData = {table: tableName, data: columnData, index};
@@ -760,10 +932,9 @@ function createTables({driver, tables, create}) {
       return driver.processTable(tableData);
     }
   }))
-    .then(() => {
-      if (create)
-        return driver.createForeignKeys(foreignKeys).then(() => data);
-      return Promise.resolve(data);
+    .then(async () => {
+      if (create) return driver.createForeignKeys(foreignKeys).then(() => ({ tablesModel, tables: updatedTables }));
+      return Promise.resolve({ tablesModel, tables: updatedTables });
     });
 }
 

@@ -42,8 +42,14 @@ Object.assign(Comment, {
   content: 'text',
   title: 'string/60',
   author: User,
-  date: 'dateTime',
-  lastModification: 'dateTime',
+  date: {
+    type: 'dateTime',
+    defaultValue: Date.now
+  },
+  lastModification: {
+    type: 'dateTime',
+    defaultValue: Date.now
+  },
   notNull: ['title', 'author'],
   index : ['date', 'content/fulltext'],
 });
@@ -82,7 +88,6 @@ const rules = {
     },
     salt : {
       read : none,          //no one can read the salt
-      write : none,         //no one can write the salt
     },
     contacts : {
       add : is('self'),     //Only ourself can add contacts
@@ -253,10 +258,6 @@ const customPlugin = {
       if(request.create) {
         //We want to make sure that the message belongs to a feed. The way to do so is to ensure that the parent of this request is Feed.
         if(!parent || parent.tableName!=='Feed') return Promise.reject({ status: 400, message: 'Comments must belong to a feed.'});
-        //Upon creation, we set the fields `date` and `lastModification`.
-        const date = new Date().toISOString();
-        request.date = date;
-        request.lastModification = date;
       }
       if(request.set) {
         //We update the `lastModification` field each time a modification happens

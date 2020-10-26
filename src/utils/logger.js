@@ -1,3 +1,7 @@
+// @ts-check
+
+/** @typedef {'database query' | 'database result' | 'resolution part' | 'resolution part title' | 'access warning' | 'info' | 'error' | 'login' | 'warning' } LogCategory */
+
 /** Custom logger. Will be improved later */
 const categories = {
   // 'database query' : 'bold',
@@ -6,6 +10,7 @@ const categories = {
   // 'resolution part title' : 'magenta',
   // 'access warning' : 'yellow',
   'info' : 'cyan',
+  'warning' : 'yellow',
   'error': 'red',
   // 'login' : 'cyan',
 };
@@ -36,6 +41,11 @@ const colors = {
 const colorMap = {};
 Object.keys(colors).forEach(key => colorMap[colors[key]] = `\x1b[${key}m`);
 
+/**
+ * Log results
+ * @param {LogCategory} category The category of the message going to be logged
+ * @param  {...string} data The data to log
+ */
 function log(category, ...data) {
   const c = categories[category];
   if(c===undefined) return;

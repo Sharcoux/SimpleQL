@@ -1,4 +1,10 @@
+// @ts-check
 
+/** @typedef { 'string' | 'integer' | 'boolean' | 'function' | 'float' | 'undefined' | 'null' |'*' } TypeValue */
+
+/** @typedef { TypeValue | Record<string, TypeValue | string[] | Record<string, TypeValue | string[] | boolean> | boolean> & { required?: string[]; strict?: boolean }} Model */
+
+/** @type Model */
 const dbColumn = {
   type : 'string',
   length: 'integer',
@@ -9,6 +15,7 @@ const dbColumn = {
   strict : true,
 };
 
+/** @type Model */
 const database = {
   user: 'string',
   password: 'string',
@@ -22,6 +29,7 @@ const database = {
   required : ['user', 'password', 'type', 'privateKey', 'host', 'database'],
 };
 
+/** @type Model */
 const login = {
   login: 'string',
   password: 'string',
@@ -52,59 +60,37 @@ const login = {
   strict : true,
 };
 
+/** @type Model */
 const security = {
   app: 'function',
   domains: ['string'],
   emailACME: 'string',
-  requestPerMinute: 'number',
+  requestPerMinute: 'integer',
   required: ['app', 'domains', 'emailACME'],
   strict: true,
 };
 
+/** @type Model */
 const stripe = {
-  app: 'function',
   secretKey: 'string',
+  customerTable: 'string',
+  customerStripeId: 'string',
+  subscriptionTable: 'string',
+  subscriptionStripeId: 'string',
+  subscriptionItemTable: 'string',
+  subscriptionItemStripeId: 'string',
   webhookURL: 'string',
-  decimal: 'boolean',
-  VAT: {
-    country: 'string',
-    percentage: 'number',
-    required: ['country', 'percentage'],
-    strict: true,
-  },
-  defaultCurrency: 'string',
-  productsTable: 'string',
-  plansTable: 'string',
-  subscriptionsTable: 'string',
-  customersTable: 'string',
-  paymentMethodsTable: 'string',
-  paymentsTable: 'string',
-
-  productName: 'string',
-  amount: 'string',
-  currency: 'string',
-  interval: 'string',
-  intervalCount: 'string',
-  trialPeriod: 'string',
-  product: 'string',
-  customer: 'string',
-  subscriptionItems: 'string',
-  paymentMethod: 'string',
-  expMonth: 'string',
-  expYear: 'string',
-  cardNumber: 'string',
-  cardCVC: 'string',
-  iban: 'string',
-  idealBank: 'string',
-  paymentType: 'string',
-  required: ['app', 'secretKey', 'webhookURL', 'planTable', 'subscrptionTable', 'userTable'],
-  strict: true,
+  listeners: {},
+  database: 'string',
+  required: ['app', 'secretKey', 'customerTable', 'customerStripeId', 'database', 'webhookURL', 'database'],
+  strict: true
 };
+
 
 module.exports = {
   dbColumn,
   database,
   login,
   security,
-  stripe,
+  stripe
 };

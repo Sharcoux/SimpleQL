@@ -1,34 +1,130 @@
-/** This is a template file to create more drivers **/
+// @ts-check
+
+/**
+ * @typedef GetParam Read data in the current database
+ * @property {string} table The table name
+ * @property {string[]} search The column to look for
+ * @property {Object=} where The constraints for the request
+ * @property {number=} offset Ignore that many first entries
+ * @property {number=} limit Return that many entries at most
+ * @property {string[]=} order Order the result accorgin to the provided columns. Prepend a '-' to use descending order.
+ */
+
+/**
+* @typedef DeleteParam Remove data from the current database
+* @property {string} table The table name
+* @property {Object=} where The constraints for the request
+*/
+
+/**
+* @typedef CreateParam Insert data into the current database
+* @property {string} table The table name
+* @property {Object | Object[]} elements The elements to insert
+*/
+
+/**
+* @typedef UpdateParam Edit data in the current database
+* @property {string} table The table name
+* @property {Object.<string, string | number>} values The values to edit
+* @property {Object=} where The constraints for the request
+*/
+
+/**
+* @typedef CreateTableParam Create a table in the current database
+* @property {string} table The table name
+* @property {import('../utils').Table} data The columns of the table to create
+* @property {import('../utils').Index[]=} index The indexes to be created in the table
+*/
+
+/**
+* @typedef ProcessTableParam Prepare the driver for a table already created in the database
+* @property {string} table The table name
+* @property {import('../utils').Table} data The columns of the table to create
+*/
+
+/** @typedef {'=' | 'ge' | 'gt' | 'le' | 'lt' | '~' | '>' | '<' | '>=' | '<=' | 'like' | '!' | 'not'} Operator */
+
+
 class Driver {
-  constructor() {
-    this.query = this.query.bind(this);
-    this.get = this.get.bind(this);
-    this.update = this.update.bind(this);
-    this.create = this.create.bind(this);
-    this.delete = this.delete.bind(this);
-    this.createTable = this.createTable.bind(this);
+  /** Clear the connection to the database */
+  async destroy() {
+    return Promise.resolve()
   }
-  query(query) {
+  /** Start a transaction with the database */
+  async startTransaction() {
+    return Promise.resolve()
   }
-  destroy() {
+  /** Commit the changes of the current transaction and closes it */
+  async commit() {
+    return Promise.resolve()
   }
-  startTransaction() {
+  /** Rollback the changes of the current transaction and closes it */
+  async rollback() {
+    return Promise.resolve()
   }
-  commit() {
+  /**
+   * Read data from the current database
+   * @param {GetParam} getParam The object describing the request
+   * @returns {Promise<import('../utils').Element[]>} The results
+   */
+  async get({ table, search, where, offset, limit, order }) {
+    return Promise.resolve([])
   }
-  rollback() {
+  /**
+   * Remove an entry from the current database
+   * @param {DeleteParam} deleteParam The object describing the request
+   * @returns {Promise<any[]>} The results
+   */
+  async delete({ table, where }) {
+    return Promise.resolve([])
   }
-  get({table, search, where, offset, limit, order}) {
+  /**
+   * Insert an entry into the current database
+   * @param {CreateParam} createParam The object describing the request
+   * @returns {Promise<any>} The results
+   */
+  async create({ table, elements }) {
+    return Promise.resolve([])
   }
-  delete({table, where}) {
+  /**
+   * Update an entry in the current database
+   * @param {UpdateParam} updateParam The object describing the request
+   * @returns {Promise<void>} The results
+   */
+  async update({ table, values, where }) {
+    return Promise.resolve()
   }
-  create({table, elements}) {
+  /**
+   * Create a table in the current database
+   * @param {CreateTableParam} createTableParam The object describing the request
+   * @returns {Promise<void>} The results
+   */
+  async createTable({ table, data, index }) {
+    return Promise.resolve()
   }
-  update({table, values, where}) {
+  /**
+   * Create the foreign keys in the database
+   * @param {Object.<string, Object.<string, string>>} foreignKeys For each table, declares the keys that should be created with the name of the association.
+   * @returns {Promise<Object[]>} The results
+   */
+  async createForeignKeys(foreignKeys = {}) {
+    return Promise.resolve([])
   }
-  createTable({table, data, index}) {
+  /**
+   * Prepare the driver with the data if the table already exists
+   * @param {ProcessTableParam} processTableParam 
+   * @returns {Promise<void>}
+   */
+  async processTable({ table = '', data = /** @type {import('../utils').Table} **/({ notNull: [], index: [], tableName: '' }) }) {
+    return Promise.resolve()
   }
 }
 
-module.exports = ({login, password, host}) => {
-};
+/**
+ * @callback CreateDriver
+ * @param {import('../database').Database} database The database configuration
+ * @returns {Promise<Driver>} Returns the driver to communicate with the database instance
+ */
+// const createDriver = ({ login, password, host }) => { };
+
+module.exports = Driver

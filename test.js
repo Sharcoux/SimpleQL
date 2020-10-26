@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+
+// ts-check
 const crypto = require('crypto');
 const Testing = require('simple-ql-testing');
 
@@ -55,6 +57,67 @@ createTestServer()
       }
     ),
 
+  ]))
+  .then(response => Testing.setJWT(response.data.User[0].jwt))
+  .then(() => test([
+    createTest(true, 'Renew the jwt token', {
+      User: {
+        get: ['jwt']
+      }
+    })
+  ]))
+  .then(response => Testing.setJWT(response.data.User[0].jwt))
+  .then(() => test([
+    createTest(false, 'Update user password without previous password',
+      {
+        User : {
+          email: 'user1@email.com',
+          set: {
+            password: 'test'
+          }
+        }
+      }),
+    createTest(false, 'Try to log in with new password',
+      {
+        User : {
+          email: 'user1@email.com',
+          password: 'test',
+        }
+      }),
+    createTest(false, 'Update user password with wrong previous password',
+      {
+        User : {
+          email: 'user1@email.com',
+          password: 'test',
+          set: {
+            password: 'test'
+          }
+        }
+      }),
+    createTest(false, 'Try to log in with new password',
+      {
+        User : {
+          email: 'user1@email.com',
+          password: 'test',
+        }
+      }),
+    createTest(true, 'Update user password',
+      {
+        User : {
+          email: 'user1@email.com',
+          password: userHashedPassword,
+          set: {
+            password: 'test'
+          }
+        }
+      }),
+    createTest(true, 'Try to log in with new password',
+      {
+        User : {
+          email: 'user1@email.com',
+          password: 'test',
+        }
+      }),
   ]))
   .then(response => Testing.setJWT(response.data.User[0].jwt))
   .then(() => test([
@@ -317,6 +380,12 @@ createTestServer()
       }),
   ]))
 
+  // Handle wrong jwt
+  .then(() => Testing.setJWT('dummy'))
+  .then(() => test([
+    createTest(false, 'Forbidden : wrong JWT', { User: { get: '*' } })
+  ]))
+
   //Concurrent server-side request test
   .then(() => {
     return Promise.all([getQuery('simpleql').then(query => query({User: {
@@ -333,11 +402,7 @@ createTestServer()
     }}))]);
   })
 
-  // Handle wrong jwt
-  .then(() => Testing.setJWT('dummy'))
-  .then(() => test([
-    createTest(false, 'Forbidden : wrong JWT', { User: { get: '*' } })
-  ]))
+  .then(() => console.log('Tests successful!'))
 
   .catch(err => {
     if(err.response) {

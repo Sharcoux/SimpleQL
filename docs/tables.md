@@ -70,7 +70,7 @@ If you need to provide more details, you can use an object to describe your data
  * **length** (in byte)
  * **unsigned** (boolean : default false)
  * **notNull** (boolean : default false)
- * **defaultValue**
+ * **defaultValue** (same as type, or a function without parameter that will resolve as type)
  * **autoIncrement** (boolean : default false)
 
 **Example:**
@@ -84,6 +84,10 @@ If you need to provide more details, you can use an object to describe your data
         notNull : true,
         defaultValue : null,
       },
+      createdAt: {
+        type: 'date',
+        defaultValue: Date.now
+      }
     }
 ```
 
