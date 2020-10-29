@@ -106,10 +106,10 @@ async function createStripePlugin (app, config) {
         // We want to retrieve the customerStripId on every request
         if (request.get && request.get !== '*' && !request[customerStripeId] && !request.get.includes(customerStripeId)) request.get.push(customerStripeId)
       },
-      [subscriptionTable]: async (request) => {
-        // We want to retrieve the customerStripId on every request
-        if (request.get && request.get !== '*' && !request[subscriptionStripeId] && !request.get.includes(subscriptionStripeId)) request.get.push(subscriptionStripeId)
-      },
+      // [subscriptionTable]: async (request) => {
+      //   // We want to retrieve the customerStripId on every request
+      //   if (request.get && request.get !== '*' && !request[subscriptionStripeId] && !request.get.includes(subscriptionStripeId)) request.get.push(subscriptionStripeId)
+      // },
       [subscriptionItemTable]: async (request) => {
         // We want to retrieve the customerStripId on every request
         if (request.get && request.get !== '*' && !request[subscriptionItemStripeId] && !request.get.includes(subscriptionItemStripeId)) request.get.push(subscriptionItemStripeId)
@@ -138,15 +138,15 @@ async function createStripePlugin (app, config) {
           if (Array.isArray(request.get)) Object.assign(result, filterObject(customer, request.get));
         })).then(() => { });
       },
-      [subscriptionTable]: async (results, { request }) => {
-        if (!Array.isArray(request.get)) return
-        return Promise.all(results.map(result => {
-          const stripeId = result[subscriptionStripeId]
-          if (!stripeId) return Promise.resolve()
-          const subscription = stripe.subscription.retrieve(stripeId)
-          if (Array.isArray(request.get)) Object.assign(result, filterObject(subscription, request.get));
-        })).then(() => {})
-      },
+      // [subscriptionTable]: async (results, { request }) => {
+      //   if (!Array.isArray(request.get)) return
+      //   return Promise.all(results.map(result => {
+      //     const stripeId = result[subscriptionStripeId]
+      //     if (!stripeId) return Promise.resolve()
+      //     const subscription = stripe.subscription.retrieve(stripeId)
+      //     if (Array.isArray(request.get)) Object.assign(result, filterObject(subscription, request.get));
+      //   })).then(() => {})
+      // },
       [subscriptionItemTable]: async (results, { request }) => {
         if (!Array.isArray(request.get)) return
         return Promise.all(results.map(result => {
