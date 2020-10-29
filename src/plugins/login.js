@@ -337,10 +337,10 @@ function createLoginPlugin (config) {
       }
     },
     onCreation: {
-      [userTable]: async (createdObject, { local }) => {
+      [userTable]: async (createdObject, { local, isAdmin }) => {
         const reservedId = createdObject.reservedId
         // Once the user is created inside the database, we set the authId to treat each further command on its behalf
-        local.authId = reservedId
+        if(!isAdmin) local.authId = reservedId
         return createJWT(reservedId, jwtSignConfig)
           .then(jwt => {
             // Add the jwt to the created object
