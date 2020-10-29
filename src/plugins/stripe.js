@@ -162,9 +162,9 @@ async function createStripePlugin (app, config) {
         // Create the user in Stripe database and update the local database
           const customerKeys = ['email', 'phone', 'address', 'name', 'description', 'metadata']
           const stripeCustomer = filterObject(created, customerKeys)
+          // TODO : Check if a user already exists in stripe with this email?
           const { id: stripeId } = await stripe.customers.create(stripeCustomer)
           await query({ [customerTable]: { reservedId: created.reservedId, set: { stripeId } } }, { admin: true })
-          stripe.customers.create(created[customerStripeId])
         }))
       }
       // Delete the user in Stripe database

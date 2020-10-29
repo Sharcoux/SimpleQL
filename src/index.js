@@ -195,9 +195,7 @@ function defaultErrorHandler (err, _req, res, next) {
         res.end(err.message)
         break
       default:
-        console.log('èèèè')
         res.writeHead(500)
-        console.error(err)
         res.end(err.message || stringify(err))
         break
     }

@@ -1,7 +1,7 @@
 // @ts-check
 
 /** This is the core of SimpleQL where every request is cut in pieces and transformed into a query to the database */
-const { isPrimitive, toType, classifyRequestData, operators, sequence, stringify, filterObject } = require('./utils')
+const { isPrimitive, toType, classifyRequestData, operators, sequence, stringify, filterObject, classifyData } = require('./utils')
 const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, DATABASE_ERROR, WRONG_VALUE } = require('./errors')
 const { prepareTables, prepareRules } = require('./prepare')
 const log = require('./utils/logger')
@@ -377,8 +377,23 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
             }
           }
 
+          /**
+           * Handle special request values: '*' means all column, and when deleting, we retrieve all previous data.
+           * @param {import('./utils').Request} request The request to analyse
+           */
+          function formatRequest (request) {
+            // When we delete an object, we want to retrieve all their data before it disappear from the database
+            if(request.delete) request.get = '*'
+            // We allow using '*' to mean all columns
+            if (request.get === '*') {
+              const tableData = classifyData(table)
+              request.get = [...tableData.primitives]
+            }
+          }
+
           try {
             checkEntry(request, primitives, objects, arrays)
+            formatRequest(request)
             // Only one instructions among create, delete, get in each request
             if (request.create && request.delete) throw new Error(`Each request can contain only one among 'create' or 'delete'. The request was : ${JSON.stringify(request)}.`)
             // Check that set instruction is acceptable
