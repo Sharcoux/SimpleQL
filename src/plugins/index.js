@@ -1,8 +1,8 @@
 // @ts-check
 
-const loginPlugin = require('./login');
-const securityPlugin = require('./security');
-const stripePlugin = require('./stripe');
+const loginPlugin = require('./login')
+const securityPlugin = require('./security')
+const stripePlugin = require('./stripe')
 
 /** @typedef {{ authId: string | number } & Object.<string, any>} Local */
 
@@ -66,4 +66,4 @@ module.exports = {
   loginPlugin,
   securityPlugin,
   stripePlugin
-};
+}

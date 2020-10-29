@@ -6,14 +6,14 @@
 
 /** @type Model */
 const dbColumn = {
-  type : 'string',
+  type: 'string',
   length: 'integer',
   unsigned: 'boolean',
   notNull: 'boolean',
   defaultValue: '*',
-  required : ['type'],
-  strict : true,
-};
+  required: ['type'],
+  strict: true
+}
 
 /** @type Model */
 const database = {
@@ -21,13 +21,13 @@ const database = {
   password: 'string',
   type: 'string',
   privateKey: 'string',
-  host : 'string',
+  host: 'string',
   database: 'string',
-  create : 'boolean',
-  charset : 'string',
-  connectionLimit : 'integer',
-  required : ['user', 'password', 'type', 'privateKey', 'host', 'database'],
-};
+  create: 'boolean',
+  charset: 'string',
+  connectionLimit: 'integer',
+  required: ['user', 'password', 'type', 'privateKey', 'host', 'database']
+}
 
 /** @type Model */
 const login = {
@@ -40,7 +40,7 @@ const login = {
   plugin: {
     google: 'string',
     facebook: 'string',
-    strict: true,
+    strict: true
   },
   jwtConfig: {
     algorithm: 'string',
@@ -56,9 +56,9 @@ const login = {
     mutatePayload: 'string',
     strict: true
   },
-  required : ['login', 'password', 'userTable'],
-  strict : true,
-};
+  required: ['login', 'password', 'userTable'],
+  strict: true
+}
 
 /** @type Model */
 const security = {
@@ -67,8 +67,8 @@ const security = {
   emailACME: 'string',
   requestPerMinute: 'integer',
   required: ['app', 'domains', 'emailACME'],
-  strict: true,
-};
+  strict: true
+}
 
 /** @type Model */
 const stripe = {
@@ -84,8 +84,7 @@ const stripe = {
   database: 'string',
   required: ['app', 'secretKey', 'customerTable', 'customerStripeId', 'database', 'webhookURL', 'database'],
   strict: true
-};
-
+}
 
 module.exports = {
   dbColumn,
@@ -93,4 +92,4 @@ module.exports = {
   login,
   security,
   stripe
-};
+}

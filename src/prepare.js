@@ -1,8 +1,8 @@
 // @ts-check
 
 /** We need to make some treatment to the data provided by the user before being able to create the server */
-const { classifyData } = require('./utils');
-const { none } = require('./accessControl');
+const { classifyData } = require('./utils')
+const { none } = require('./accessControl')
 
 /** transform tables into sql data types and add a tableName property to each table. Returns the tableModel generated
  * author = User is transformed into authorId = 'integer/10';
@@ -10,151 +10,151 @@ const { none } = require('./accessControl');
  * @param {import('./utils').TablesDeclaration} tables The tables they way they were declared
  * @returns {{ tablesModel: import('./utils').Tables, tables: import('./utils').FormattedTablesDeclaration }} Returns the table model for the database and the updated tables declaration
 */
-function prepareTables(tables) {
-  //We add the table name into each table data
-  Object.keys(tables).forEach(tableName => tables[tableName].tableName = tableName);
-  //We add the reservedId props
-  //TODO make possible to use UUID instead of auto-increment integer
+function prepareTables (tables) {
+  // We add the table name into each table data
+  Object.keys(tables).forEach(tableName => tables[tableName].tableName = tableName)
+  // We add the reservedId props
+  // TODO make possible to use UUID instead of auto-increment integer
   /** @type {import('./utils').Column} */
-  const reservedId = {type : 'integer', length: 10, unsigned: true, autoIncrement : true};
-  Object.keys(tables).forEach(tableName => tables[tableName].reservedId = reservedId);
-  
-  //We transform the tables into a valid data model
+  const reservedId = { type: 'integer', length: 10, unsigned: true, autoIncrement: true }
+  Object.keys(tables).forEach(tableName => tables[tableName].reservedId = reservedId)
+
+  // We transform the tables into a valid data model
   const tablesModel = Object.keys(tables).reduce((acc, tableName) => {
-    const table = tables[tableName];
-    const { empty, primitives, objects, arrays } = classifyData(table);
+    const table = tables[tableName]
+    const { empty, primitives, objects, arrays } = classifyData(table)
 
     // @ts-ignore
-    acc[tableName] = {}; //Create table entry
+    acc[tableName] = {} // Create table entry
 
-    //We transform the short index string form into the object one
-    if(table.index) {
+    // We transform the short index string form into the object one
+    if (table.index) {
       acc[tableName].index = table.index.map(elt => {
-        if(typeof elt === 'string') {
-          const details = elt.split('/');
+        if (typeof elt === 'string') {
+          const details = elt.split('/')
           return details.reduce((index, value) => {
-            //Index length (the first number value we might find)
-            if(!isNaN(/** @type {any} **/(value))) index.length = Number.parseInt(value, 10);
-            //Index column name (the first string value that matches a column name)
-            else if(tables[tableName][value]) index.column = value;
-            //Index type (one of 'unique', 'fulltext' or 'spatial')
-            else if(['unique', 'fulltext', 'spatial'].includes(value)) index.type = /** @type {'unique' | 'fulltext' | 'spatial'} **/(value);
-            else throw new Error(`The value ${value} for index of table ${table.tableName} could not be interpreted, nor as a type, nor as a column, nor as a length. Check the documentation.`);
-            return index;
-          }, /** @type {import('./utils').Index} **/({}));
-        } else return elt;
-      });
+            // Index length (the first number value we might find)
+            if (!isNaN(/** @type {any} **/(value))) index.length = Number.parseInt(value, 10)
+            // Index column name (the first string value that matches a column name)
+            else if (tables[tableName][value]) index.column = value
+            // Index type (one of 'unique', 'fulltext' or 'spatial')
+            else if (['unique', 'fulltext', 'spatial'].includes(value)) index.type = /** @type {'unique' | 'fulltext' | 'spatial'} **/(value)
+            else throw new Error(`The value ${value} for index of table ${table.tableName} could not be interpreted, nor as a type, nor as a column, nor as a length. Check the documentation.`)
+            return index
+          }, /** @type {import('./utils').Index} **/({}))
+        } else return elt
+      })
     }
 
-    if(empty.length) throw new Error(`The fields ${empty.join(', ')} do not have a value.`);
+    if (empty.length) throw new Error(`The fields ${empty.join(', ')} do not have a value.`)
 
-    //Add primitives constraints
+    // Add primitives constraints
     primitives.forEach(key => {
-      const data = /** @type {import('./utils').Column | string} **/(table[key]);
-      //Parse the short string data type
-      if(typeof data === 'string') {
-        const [type, length] = data.split('/');
-        acc[tableName][key] = { type: /** @type {import('./utils').Column['type']} **/(type), length: parseInt(length, 10) };
-        table[key] = acc[tableName][key];// We update the table declaration
+      const data = /** @type {import('./utils').Column | string} **/(table[key])
+      // Parse the short string data type
+      if (typeof data === 'string') {
+        const [type, length] = data.split('/')
+        acc[tableName][key] = { type: /** @type {import('./utils').Column['type']} **/(type), length: parseInt(length, 10) }
+        table[key] = acc[tableName][key]// We update the table declaration
       } else {
-        acc[tableName][key] = data;
+        acc[tableName][key] = data
       }
-    });
+    })
 
-    //Transforme author = User into authorId = 'integer/10';
+    // Transforme author = User into authorId = 'integer/10';
     objects.forEach(key => {
-      const objectTable = /** @type {import('./utils').TableValue} **/(table[key]);
-      acc[tableName][key+'Id'] = {
+      const objectTable = /** @type {import('./utils').TableValue} **/(table[key])
+      acc[tableName][key + 'Id'] = {
         type: 'integer',
-        length : 10,
-        unsigned : true,
-      };
-      //We need to change the index accordingly
-      if(acc[tableName].index) {
+        length: 10,
+        unsigned: true
+      }
+      // We need to change the index accordingly
+      if (acc[tableName].index) {
         acc[tableName].index.forEach(index => {
-          //Rewrite the column name for name + Id
-          if(Array.isArray(index.column)) {
-            const keyIndex = index.column.findIndex(c => c===key);
-            if(keyIndex>=0) index.column[keyIndex] = key + 'Id';
-          } else if(index.column === key) {
-            index.column = key + 'Id';
+          // Rewrite the column name for name + Id
+          if (Array.isArray(index.column)) {
+            const keyIndex = index.column.findIndex(c => c === key)
+            if (keyIndex >= 0) index.column[keyIndex] = key + 'Id'
+          } else if (index.column === key) {
+            index.column = key + 'Id'
           }
-          //Indexes on object table alone are ignored
-          if(index.column === key) throw new Error(`indexes on keys referencing foreign tables will be ignored, except for composite indexes. Please remove index ${key} from table ${tableName}.`);
-        });
+          // Indexes on object table alone are ignored
+          if (index.column === key) throw new Error(`indexes on keys referencing foreign tables will be ignored, except for composite indexes. Please remove index ${key} from table ${tableName}.`)
+        })
       }
-      //We need to change the notNull columns
-      if(table.notNull) {
-        table.notNull = table.notNull.map(column => column===key ? key+'Id' : column);
+      // We need to change the notNull columns
+      if (table.notNull) {
+        table.notNull = table.notNull.map(column => column === key ? key + 'Id' : column)
       }
-      //We create the foreign key
+      // We create the foreign key
       acc[tableName].foreignKeys = {
-        [key+'Id'] : objectTable.tableName,
-      };
-    });
+        [key + 'Id']: objectTable.tableName
+      }
+    })
 
-    //Create an association table. contacts = [User] creates a map contactsUser = {userId : 'integer/10', contactsId : 'integer/10'}
+    // Create an association table. contacts = [User] creates a map contactsUser = {userId : 'integer/10', contactsId : 'integer/10'}
     arrays.forEach(key => {
-      const name = key+tableName;
-      const associatedTable = /** @type {import('./utils').TableValue} */(table[key][0]);
+      const name = key + tableName
+      const associatedTable = /** @type {import('./utils').TableValue} */(table[key][0])
       // We create a dedicated table to store the associations
       acc[name] = /** @type {import('./utils').Table} **/({
         reservedId,
-        [tableName+'Id'] : {
+        [tableName + 'Id']: {
           type: 'integer',
-          length : 10,
-          unsigned : true,
+          length: 10,
+          unsigned: true
         },
-        [key+'Id']: {
+        [key + 'Id']: {
           type: 'integer',
-          length : 10,
-          unsigned : true,
+          length: 10,
+          unsigned: true
         },
         foreignKeys: {
-          [tableName+'Id'] : tableName,
-          [key+'Id'] : associatedTable.tableName,
-        },
-      });
-      //arrays cannot be notNull
-      if(acc[tableName].notNull && acc[tableName].notNull.includes(key)) throw new Error(`fields denoting an association like ${key} cannot be notNull in table ${tableName}.`);
-      //Indexes on array
-      const index = acc[tableName].index;
-      //If the index denote the association table as being unique, we consider that the table cannot have duplicate entries.
-      if(index) {
+          [tableName + 'Id']: tableName,
+          [key + 'Id']: associatedTable.tableName
+        }
+      })
+      // arrays cannot be notNull
+      if (acc[tableName].notNull && acc[tableName].notNull.includes(key)) throw new Error(`fields denoting an association like ${key} cannot be notNull in table ${tableName}.`)
+      // Indexes on array
+      const index = acc[tableName].index
+      // If the index denote the association table as being unique, we consider that the table cannot have duplicate entries.
+      if (index) {
         // We don't support multiple column indexes on association tables for now
-        const multipleColumn = index.find(index => Array.isArray(index.column) && index.column.find(c => c===key));
-        if(multipleColumn) {
-          throw new Error(`Multiple indexes cannot contain keys referencing association tables. Please remove ${key} from index ${index} in table ${tableName}.`);
+        const multipleColumn = index.find(index => Array.isArray(index.column) && index.column.find(c => c === key))
+        if (multipleColumn) {
+          throw new Error(`Multiple indexes cannot contain keys referencing association tables. Please remove ${key} from index ${index} in table ${tableName}.`)
         }
         // Translate the index about the association table into an index for the dedicated table we created
-        const arrayIndex = index.find(index => index.column === key);
-        if(arrayIndex) {
-          if(arrayIndex.type && arrayIndex.type!=='unique') {
-            throw new Error(`Indexes on keys referencing association tables must be of type unique. Please set the type of ${key} in the index of table ${tableName} to 'unique', or remove the index.`);
+        const arrayIndex = index.find(index => index.column === key)
+        if (arrayIndex) {
+          if (arrayIndex.type && arrayIndex.type !== 'unique') {
+            throw new Error(`Indexes on keys referencing association tables must be of type unique. Please set the type of ${key} in the index of table ${tableName} to 'unique', or remove the index.`)
           } else {
-            //Association table entries are supposed to be unique
+            // Association table entries are supposed to be unique
             acc[name].index = [{
-              column: [key+'Id', tableName+'Id'],
-              type: 'unique',
-            }];
-            //We remove the index from the original table as it belongs to the association one
-            index.splice(index.indexOf(arrayIndex), 1);
+              column: [key + 'Id', tableName + 'Id'],
+              type: 'unique'
+            }]
+            // We remove the index from the original table as it belongs to the association one
+            index.splice(index.indexOf(arrayIndex), 1)
           }
         }
       }
-    });
+    })
 
-    //Set the notNull attribute for each column
-    if(table.notNull) {
-      table.notNull.forEach(column => acc[tableName][column].notNull = true);
+    // Set the notNull attribute for each column
+    if (table.notNull) {
+      table.notNull.forEach(column => acc[tableName][column].notNull = true)
     }
 
     // Update the corrected indexes
-    if(table.index) table.index = acc[tableName].index;
+    if (table.index) table.index = acc[tableName].index
 
-    return acc;
-  }, /** @type {import('./utils').Tables} **/({}));
-  return { tablesModel, tables: /** @type {import('./utils').FormattedTablesDeclaration} */(tables)};
+    return acc
+  }, /** @type {import('./utils').Tables} **/({}))
+  return { tablesModel, tables: /** @type {import('./utils').FormattedTablesDeclaration} */(tables) }
 }
 
 /**
@@ -169,48 +169,48 @@ function prepareTables(tables) {
  * (works by side effects, editing directly the rules object)
  * @param {PrepareRulesParams} prepareRulesParams
  */
-function prepareRules({rules, tables}) {
+function prepareRules ({ rules, tables }) {
   /** @type {import('./accessControl').PreparedRules} **/
-  const preparedRules = {};
+  const preparedRules = {}
   Object.keys(rules).forEach(tableName => {
-    const tableRules = rules[tableName];
-    preparedRules[tableName] = /** @type {any} **/({});
+    const tableRules = rules[tableName]
+    preparedRules[tableName] = /** @type {any} **/({})
     /**
      * Apply the PreParams to the rule once and for all
      * @param {import('./accessControl').Rule} rule The rule
      * @param {string} propName The name of the column the rule is applying to
      * @returns {import('./accessControl').PreparedRule} The rule with PreParams already applied
      */
-    function partialApplication(rule, propName) {
-      if(!(rule instanceof Function)) throw new Error(`Rules should be functions in table ${tableName} for ${propName}.`);
-      const result = rule({tables, tableName});
-      if(!(result instanceof Function)) throw new Error(`Rules should be functions that return a function in table ${tableName} for ${propName}.`);
-      return result;
+    function partialApplication (rule, propName) {
+      if (!(rule instanceof Function)) throw new Error(`Rules should be functions in table ${tableName} for ${propName}.`)
+      const result = rule({ tables, tableName })
+      if (!(result instanceof Function)) throw new Error(`Rules should be functions that return a function in table ${tableName} for ${propName}.`)
+      return result
     }
-    //Prepare the provided rules
+    // Prepare the provided rules
     Object.keys(tableRules).forEach(key => {
-      //Prepare table level rules
-      if(['read', 'write', 'create', 'delete'].includes(key)) /** @type {import('./accessControl').PreparedTableRule} **/(preparedRules[tableName])[key] = partialApplication(/** @type {import('./accessControl').TableRule} **/(tableRules)[key], key);
-      //Prepare column level rules
+      // Prepare table level rules
+      if (['read', 'write', 'create', 'delete'].includes(key)) /** @type {import('./accessControl').PreparedTableRule} **/(preparedRules[tableName])[key] = partialApplication(/** @type {import('./accessControl').TableRule} **/(tableRules)[key], key)
+      // Prepare column level rules
       else {
-        const columnRules = tableRules[key];
-        preparedRules[tableName][key] = {};
+        const columnRules = tableRules[key]
+        preparedRules[tableName][key] = {}
         Object.keys(columnRules).forEach(k => {
-          const validKeys = ['read', 'write', 'add', 'remove'];
-          if(validKeys.includes(k)) preparedRules[tableName][key][k] = partialApplication(columnRules[k], key+'.'+k);
-          else throw new Error(`The value of ${key} in ${tableName} can only contain the following keys: ${validKeys.join(', ')}. ${k} is not accepted.`);
-        });
+          const validKeys = ['read', 'write', 'add', 'remove']
+          if (validKeys.includes(k)) preparedRules[tableName][key][k] = partialApplication(columnRules[k], key + '.' + k)
+          else throw new Error(`The value of ${key} in ${tableName} can only contain the following keys: ${validKeys.join(', ')}. ${k} is not accepted.`)
+        })
       }
-    });
-    //Add a 'none' rule for reservedId
+    })
+    // Add a 'none' rule for reservedId
     preparedRules[tableName].reservedId = {
       write: partialApplication(none, 'reservedId')
-    };
-  });
-  return preparedRules;
+    }
+  })
+  return preparedRules
 }
 
 module.exports = {
-  prepareTables, //Prepare the tables and returns the associated dataModel
-  prepareRules,  //Prepare the rules with the database configuration
-};
+  prepareTables, // Prepare the tables and returns the associated dataModel
+  prepareRules // Prepare the rules with the database configuration
+}

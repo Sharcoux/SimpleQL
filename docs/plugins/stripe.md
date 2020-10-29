@@ -18,6 +18,16 @@ To use the plugin, you will need to provide the following informations:
 
 When **creating** or **deleting** a user with SimpleQL, the user will automatically be created/deleted on the **Stripe** database, and the `customerStripeId` will be added in the user table.
 
+## Local webhooks tests
+
+To test webhooks locally, you need to:
+
+* run `npm run stripe-login`
+* run `npm run local-webhooks`
+* run `export WH_SECRET=<your secret>`
+
+You can now run your webhooks
+
 ## Tables
 
 To use this plugin, you need the following tables:

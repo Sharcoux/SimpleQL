@@ -1,48 +1,50 @@
 // @ts-check
 
-const { getOptionalDep, filterObject } = require('../utils');
-const check = require('../utils/type-checking');
-const { stripeCheckout : stripeModel } = require('../utils/types');
-const URL = require('url');
-const https = require('https');
+const { getOptionalDep, filterObject } = require('../utils')
+const check = require('../utils/type-checking')
+const { stripeCheckout: stripeModel } = require('../utils/types')
+const URL = require('url').URL
+const https = require('https')
 
 /** @type {import('stripe').Stripe & { [object: string]: import('stripe').Stripe['customers'] }} */
-let stripe;
+let stripe
 
-//Update the list of trustable ip everyday
-let validIPs = [];
-let updatingInterval = null;
+// Update the list of trustable ip everyday
+let validIPs = []
+let updatingInterval = null
 
 /** Update Stripe Ip address to be sure the hooks are coming from there */
-function updateStripeIpList() {    
-  const url = 'https://stripe.com/files/ips/ips_webhooks.json';
-  https.get(url,(res) => {
-    let body = '';
-  
-    res.on('data', (chunk) => {
-      body += chunk;
-    });
-  
-    res.on('end', () => {
-      try {
-        let json = JSON.parse(body);
-        if(!json.WEBHOOKS) console.error('Wrong file format for Stripe Ips', body);
-        validIPs = json.WEBHOOKS;
-        console.log('Stripe IPs list updated');
-        // do something with JSON
-      } catch (error) {
-        console.error('Error when retrieving Stripe IPs', error.message);
-      }
-    });
-  
-  }).on('error', (error) => {
-    console.error('Error when retrieving Stripe IPs', error.message);
-  });
+async function updateStripeIpList () {
+  return new Promise((resolve, reject) => {
+    const url = 'https://stripe.com/files/ips/ips_webhooks.json'
+    https.get(url, (res) => {
+      let body = ''
+
+      res.on('data', (chunk) => {
+        body += chunk
+      })
+
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(body)
+          if (!json.WEBHOOKS) throw new Error(`Wrong file format for Stripe Ips: ${body}`)
+          validIPs = json.WEBHOOKS
+          console.log('Stripe IPs list updated')
+          resolve()
+          // do something with JSON
+        } catch (error) {
+          reject(`Error when retrieving Stripe IPs: ${error.message}`)
+        }
+      })
+    }).on('error', (error) => {
+      reject(`Error when retrieving Stripe IPs: ${error.message}`)
+    })
+  })
 }
 
 /**
  * @typedef {Object} StripeObject
- * @property {string} id The event id 
+ * @property {string} id The event id
  * @property {string} object The object type
  * @property {number} created The creation date of this event
  * @property {boolean} livemode true for live mode, false for test mode
@@ -67,7 +69,6 @@ function updateStripeIpList() {
  * @property {string=} subscriptionItemTable The table where the subscription items will be stored in the SimpleQL database
  * @property {string=} subscriptionItemStripeId The column where the Stripe subscriptionItem id can be stored in the subscriptionItem table
  * @property {string} webhookURL The URL were the Stripe webhooks should be sent
- * @property {string} database The name of the SimpleQL database
  * @property {Object.<string, StripeListener>=} listeners The listeners to Stripe webhooks
  */
 
@@ -78,94 +79,99 @@ function updateStripeIpList() {
  * @returns {Promise<import('.').Plugin>} The Stripe Plugin
  */
 async function createStripePlugin (app, config) {
-  updateStripeIpList();
-  if(!updatingInterval) updatingInterval = setInterval(updateStripeIpList, 1000*3600*24);
-  checkPluginConfig(config);
+  await updateStripeIpList()
+  if (!updatingInterval) updatingInterval = setInterval(updateStripeIpList, 1000 * 3600 * 24)
+  checkPluginConfig(config)
 
-  const { secretKey, customerTable = 'User', customerStripeId = 'stripeId', webhookURL = 'stripe-webhooks', listeners = {},
-    subscriptionTable = 'Subscription', subscriptionStripeId = 'stripeId', 
+  const {
+    secretKey, customerTable = 'User', customerStripeId = 'stripeId', webhookURL = 'stripe-webhooks', listeners = {},
+    subscriptionTable = 'Subscription', subscriptionStripeId = 'stripeId',
     subscriptionItemTable = 'SubscriptionItem', subscriptionItemStripeId = 'stripeId'
-  } = config;
-  stripe = getOptionalDep('stripe', 'StripePlugin')(secretKey);
-  const bodyParser = require('body-parser');
+  } = config
+  stripe = getOptionalDep('stripe', 'StripePlugin')(secretKey)
+  const bodyParser = require('body-parser')
 
-  // @ts-ignore
-  const url = new URL(webhookURL);
+  const url = new URL(webhookURL)
 
   // TODO : use only the hooks from the listeners list, and update the webhookEndpoint
-  const { data } = await stripe.webhookEndpoints.list();
-  const existingEndpoint = data.find(endpoint => endpoint.url === url);
-  const { secret } = existingEndpoint || await stripe.webhookEndpoints.create({ url, enabled_events: ['*']});
+  const { data } = await stripe.webhookEndpoints.list()
+  const existingEndpoint = process.env.WH_SECRET ? { secret: process.env.WH_SECRET } : data.find(endpoint => endpoint.url === webhookURL)
+  const { secret } = existingEndpoint || await stripe.webhookEndpoints.create({ url: webhookURL, enabled_events: ['*'] })
   // Match the raw body to content type application/json
-  app.post(url.pathname, bodyParser.raw({type: 'application/json'}), webhookListener(secret, listeners));
+  app.post(url.pathname, bodyParser.raw({ type: 'application/json' }), webhookListener(secret, listeners))
 
   return {
     onRequest: {
       [customerTable]: async (request) => {
         // We want to retrieve the customerStripId on every request
-        if(request.get && request.get !== '*' && !request.get.includes(customerStripeId)) request.get.push(customerStripeId);
+        if (request.get && request.get !== '*' && !request[customerStripeId] && !request.get.includes(customerStripeId)) request.get.push(customerStripeId)
       },
       [subscriptionTable]: async (request) => {
         // We want to retrieve the customerStripId on every request
-        if(request.get && request.get !== '*' && !request.get.includes(subscriptionStripeId)) request.get.push(subscriptionStripeId);
+        if (request.get && request.get !== '*' && !request[subscriptionStripeId] && !request.get.includes(subscriptionStripeId)) request.get.push(subscriptionStripeId)
       },
       [subscriptionItemTable]: async (request) => {
         // We want to retrieve the customerStripId on every request
-        if(request.get && request.get !== '*' && !request.get.includes(subscriptionItemStripeId)) request.get.push(subscriptionItemStripeId);
+        if (request.get && request.get !== '*' && !request[subscriptionItemStripeId] && !request.get.includes(subscriptionItemStripeId)) request.get.push(subscriptionItemStripeId)
       }
     },
     onCreation: {
       [customerTable]: async (created, { local }) => {
-        if(!local.stripeCreated) local.stripeCreated = [];
-        local.stripeCreated.push(created);
+        if (!local.stripeCreated) local.stripeCreated = []
+        local.stripeCreated.push(created)
       }
     },
     onDeletion: {
       [customerTable]: async (deleted, { local }) => {
-        await stripe.customers.del(deleted[customerStripeId]);
-        if(!local.stripeDeleted) local.stripeDeleted = [];
-        local.stripeDeleted.push(deleted);
+        await stripe.customers.del(deleted[customerStripeId])
+        if (!local.stripeDeleted) local.stripeDeleted = []
+        local.stripeDeleted.push(deleted)
       }
     },
     onResult: {
       [customerTable]: async (results, { request }) => {
+        if (!Array.isArray(request.get)) return
         return Promise.all(results.map(result => {
           const stripeId = result[customerStripeId];
-          if(!stripeId) return Promise.resolve();
-          const customer = stripe.customers.retrieve(stripeId, { expand: ['subscriptions']});
-          if(Array.isArray(request.get)) request.get.forEach(key => result[key] = customer[key]);
-        })).then(() => {});
+          if (!stripeId) return Promise.resolve();
+          const customer = stripe.customers.retrieve(stripeId, { expand: ['subscriptions'] });
+          if (Array.isArray(request.get)) Object.assign(result, filterObject(customer, request.get));
+        })).then(() => { });
       },
       [subscriptionTable]: async (results, { request }) => {
+        if (!Array.isArray(request.get)) return
         return Promise.all(results.map(result => {
-          const stripeId = result[subscriptionStripeId];
-          if(!stripeId) return Promise.resolve();
-          const customer = stripe.customers.retrieve(stripeId, { expand: ['subscriptions']});
-          if(Array.isArray(request.get)) request.get.forEach(key => result[key] = customer[key]);
-        })).then(() => {});
+          const stripeId = result[subscriptionStripeId]
+          if (!stripeId) return Promise.resolve()
+          const subscription = stripe.subscription.retrieve(stripeId)
+          if (Array.isArray(request.get)) Object.assign(result, filterObject(subscription, request.get));
+        })).then(() => {})
       },
       [subscriptionItemTable]: async (results, { request }) => {
+        if (!Array.isArray(request.get)) return
         return Promise.all(results.map(result => {
-          const stripeId = result[subscriptionItemStripeId];
-          if(!stripeId) return Promise.resolve();
-          const customer = stripe.customers.retrieve(stripeId, { expand: ['subscriptions']});
-          if(Array.isArray(request.get)) request.get.forEach(key => result[key] = customer[key]);
-        })).then(() => {});
+          const stripeId = result[subscriptionItemStripeId]
+          if (!stripeId) return Promise.resolve()
+          const subscriptionItem = stripe.customers.retrieve(stripeId)
+          if (Array.isArray(request.get)) Object.assign(result, filterObject(subscriptionItem, request.get));
+        })).then(() => {})
       }
     },
     onSuccess: async (_results, { local, query }) => {
-      if(local.stripeCreated) await Promise.all(local.stripeCreated.map(async created => {
+      if (local.stripeCreated) {
+        await Promise.all(local.stripeCreated.map(async created => {
         // Create the user in Stripe database and update the local database
-        const customerKeys = ['email', 'phone', 'address', 'name', 'description', 'metadata'];
-        const stripeCustomer = filterObject(created, customerKeys);
-        const { id: stripeId } = await stripe.customers.create(stripeCustomer);
-        await query({ [customerTable]: { reservedId: created.reservedId, set: { stripeId } }}, { admin: true });
-        stripe.customers.create(created[customerStripeId]);
-      }));
+          const customerKeys = ['email', 'phone', 'address', 'name', 'description', 'metadata']
+          const stripeCustomer = filterObject(created, customerKeys)
+          const { id: stripeId } = await stripe.customers.create(stripeCustomer)
+          await query({ [customerTable]: { reservedId: created.reservedId, set: { stripeId } } }, { admin: true })
+          stripe.customers.create(created[customerStripeId])
+        }))
+      }
       // Delete the user in Stripe database
-      if(local.stripeDeleted) await Promise.all(local.stripeDeleted.map(deleted => stripe.customers.del(deleted[customerStripeId])));
+      if (local.stripeDeleted) await Promise.all(local.stripeDeleted.map(deleted => stripe.customers.del(deleted[customerStripeId])))
     }
-  };
+  }
 }
 
 /**
@@ -174,47 +180,47 @@ async function createStripePlugin (app, config) {
  * @throws Throws an error if the config is wrong
  */
 function checkPluginConfig (config) {
-  check(stripeModel, config);
-  if(config.listeners) {
-    const listeners = config.listeners;
-    const unknownHook = Object.keys(listeners).find(key => !stripeEvents.includes(key));
-    if(unknownHook) throw new Error(`${unknownHook} is not a known Stripe hook in 'listeners' props of StripePlugin config`);
-    const notAFunction = Object.keys(listeners).find(key => typeof listeners[key] !== 'function');
-    if(notAFunction) throw new Error(`${listeners[notAFunction]} is not a function for webhook ${notAFunction} in 'listeners' of StripePlugin`);
+  check(stripeModel, config)
+  if (config.listeners) {
+    const listeners = config.listeners
+    const unknownHook = Object.keys(listeners).find(key => !stripeEvents.includes(key))
+    if (unknownHook) throw new Error(`${unknownHook} is not a known Stripe hook in 'listeners' props of StripePlugin config`)
+    const notAFunction = Object.keys(listeners).find(key => typeof listeners[key] !== 'function')
+    if (notAFunction) throw new Error(`${listeners[notAFunction]} is not a function for webhook ${notAFunction} in 'listeners' of StripePlugin`)
   }
 }
-  
+
 /**
  * Setup webhooks for Stripe
  * @param {string} webhookSecret The webhook secret received when creating the webhook
  * @param {Object.<string, StripeListener>=} callbacks The listeners for each webhook
  */
-function webhookListener(webhookSecret, callbacks) {
+function webhookListener (webhookSecret, callbacks) {
   return async (request, response) => {
-    if(!validIPs.includes(request.ip)) return response.status(403).end();
-    const sig = request.headers['stripe-signature'];
-    let event;
-  
+    if (!validIPs.includes(request.ip)) return response.status(403).end()
+    const sig = request.headers['stripe-signature']
+    let event
+
     try {
-      event = stripe.webhooks.constructEvent(request.body, sig, webhookSecret);
+      event = stripe.webhooks.constructEvent(request.body, sig, webhookSecret)
     } catch (err) {
-      return response.status(400).send(`Webhook Error: ${err.message}`);
+      return response.status(400).send(`Webhook Error: ${err.message}`)
     }
-  
+
     // Handle the event
-    if(stripeEvents.includes(event.type)) {
-      console.log(`We received ${event.type} webhook.`);
-      const callback = callbacks[event.type];
-      if(callback) callback(event);
+    if (stripeEvents.includes(event.type)) {
+      console.log(`We received ${event.type} webhook.`)
+      const callback = callbacks[event.type]
+      if (callback) callback(event)
       // Return a 200 response to acknowledge receipt of the event
-      response.json({received: true});
+      response.json({ received: true })
     } else {
-      return response.status(400).end();
-    }  
-  };
+      return response.status(400).end()
+    }
+  }
 }
-  
-module.exports = createStripePlugin;
+
+module.exports = createStripePlugin
 
 const stripeEvents = [
   'account.updated',
@@ -380,4 +386,4 @@ const stripeEvents = [
   'transfer.paid',
   'transfer.reversed',
   'transfer.updated'
-];
+]

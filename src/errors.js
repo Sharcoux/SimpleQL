@@ -1,16 +1,17 @@
 const errors = {
-  REQUIRED : 'required',
-  NOT_SETTABLE : 'notSettable',
-  NOT_UNIQUE : 'notUnique',
-  NOT_FOUND : 'notFound',
-  BAD_REQUEST : 'badRequest',
-  WRONG_PASSWORD : 'wrongPassword',
-  UNAUTHORIZED : 'unauthorized',
-  DATABASE_ERROR : 'databaseError',
-  FORBIDDEN : 'forbidden',
-  ACCESS_DENIED: 'accessDenied',
-  WRONG_VALUE: 'wrongValue',
-  CONFLICT: 'conflict',
+  REQUIRED: 'REQUIRED',
+  NOT_SETTABLE: 'NOT_SETTABLE',
+  NOT_UNIQUE: 'NOT_UNIQUE',
+  NOT_FOUND: 'NOT_FOUND',
+  BAD_REQUEST: 'BAD_REQUEST',
+  WRONG_PASSWORD: 'WRONG_PASSWORD',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  DATABASE_ERROR: 'DATABASE_ERROR',
+  FORBIDDEN: 'forbFORBIDDENidden',
+  ACCESS_DENIED: 'ACCESS_DENIED',
+  WRONG_VALUE: 'WRONG_VALUE',
+  CONFLICT: 'CONFLICT',
+  TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS'
 };
 
 /**
