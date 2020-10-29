@@ -28,7 +28,7 @@ async function updateStripeIpList () {
         try {
           const json = JSON.parse(body)
           if (!json.WEBHOOKS) throw new Error(`Wrong file format for Stripe Ips: ${body}`)
-          validIPs = json.WEBHOOKS
+          validIPs = [...json.WEBHOOKS, '127.0.0.1']
           console.log('Stripe IPs list updated')
           resolve()
           // do something with JSON
@@ -123,7 +123,6 @@ async function createStripePlugin (app, config) {
     },
     onDeletion: {
       [customerTable]: async (deleted, { local }) => {
-        await stripe.customers.del(deleted[customerStripeId])
         if (!local.stripeDeleted) local.stripeDeleted = []
         local.stripeDeleted.push(deleted)
       }
