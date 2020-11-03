@@ -28,7 +28,7 @@ async function updateStripeIpList () {
         try {
           const json = JSON.parse(body)
           if (!json.WEBHOOKS) throw new Error(`Wrong file format for Stripe Ips: ${body}`)
-          validIPs = [...json.WEBHOOKS, '127.0.0.1']
+          validIPs = [...json.WEBHOOKS, '127.0.0.1', '::1']
           console.log('Stripe IPs list updated')
           resolve()
           // do something with JSON
