@@ -68,6 +68,7 @@ function checkType (field, table, expectedType, minSize, tableName) {
 function isString (key, value, table) {
   if (typeof value !== 'string') {
     // @ts-ignore
+    // eslint-disable-next-line no-throw-literal
     throw {
       name: BAD_REQUEST,
       message: `${key} is expected to be of type String in ${table}, but we received ${value}`
@@ -168,7 +169,7 @@ function createLoginPlugin (config) {
   jwtVerifyConfig.algorithms = [jwtConfig.algorithm]
   /** @type {import('jsonwebtoken').SignOptions} */
   const jwtSignConfig = filterObject(jwtConfig, ['algorithm', 'keyId', 'expiresIn', 'notBefore', 'audience', 'subject', 'issuer', 'jwtid', 'mutatePayload', 'noTimestamp', 'header', 'encoding'])
-  
+
   let axios
   if (google || facebook) axios = getOptionalDep('axios', 'LoginPlugin')
 
@@ -317,7 +318,7 @@ function createLoginPlugin (config) {
                 delete request[password]
                 request.reservedId = reservedId
                 const tokens = local.jwt || {}
-                if(!isAdmin) local.authId = reservedId
+                if (!isAdmin) local.authId = reservedId
                 // If the log succeeds, we return a jwt token
                 return createJWT(reservedId, jwtSignConfig)
                   .then(jwtToken => tokens[reservedId] = jwtToken)
@@ -340,7 +341,7 @@ function createLoginPlugin (config) {
       [userTable]: async (createdObject, { local, isAdmin }) => {
         const reservedId = createdObject.reservedId
         // Once the user is created inside the database, we set the authId to treat each further command on its behalf
-        if(!isAdmin) local.authId = reservedId
+        if (!isAdmin) local.authId = reservedId
         return createJWT(reservedId, jwtSignConfig)
           .then(jwt => {
             // Add the jwt to the created object

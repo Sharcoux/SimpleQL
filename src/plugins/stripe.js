@@ -28,7 +28,7 @@ async function updateStripeIpList () {
         try {
           const json = JSON.parse(body)
           if (!json.WEBHOOKS) throw new Error(`Wrong file format for Stripe Ips: ${body}`)
-          validIPs = [...json.WEBHOOKS, '127.0.0.1', '::1']
+          validIPs = [...json.WEBHOOKS, '127.0.0.1', '::1', '::ffff:127.0.0.1']
           console.log('Stripe IPs list updated')
           resolve()
           // do something with JSON
@@ -64,10 +64,6 @@ async function updateStripeIpList () {
  * @property {string} secretKey The Stripe secretKey
  * @property {string} customerTable The table where the users will be stored in the SimpleQL database
  * @property {string} customerStripeId The column where the Stripe customer id can be stored in the user table
- * @property {string=} subscriptionTable The table where the subscriptions will be stored in the SimpleQL database
- * @property {string=} subscriptionStripeId The column where the Stripe subscription id can be stored in the subscription table
- * @property {string=} subscriptionItemTable The table where the subscription items will be stored in the SimpleQL database
- * @property {string=} subscriptionItemStripeId The column where the Stripe subscriptionItem id can be stored in the subscriptionItem table
  * @property {string} webhookURL The URL were the Stripe webhooks should be sent
  * @property {Object.<string, StripeListener>=} listeners The listeners to Stripe webhooks
  */
@@ -84,9 +80,7 @@ async function createStripePlugin (app, config) {
   checkPluginConfig(config)
 
   const {
-    secretKey, customerTable = 'User', customerStripeId = 'stripeId', webhookURL = 'stripe-webhooks', listeners = {},
-    subscriptionTable = 'Subscription', subscriptionStripeId = 'stripeId',
-    subscriptionItemTable = 'SubscriptionItem', subscriptionItemStripeId = 'stripeId'
+    secretKey, customerTable = 'User', customerStripeId = 'stripeId', webhookURL = 'stripe-webhooks', listeners = {}
   } = config
   stripe = getOptionalDep('stripe', 'StripePlugin')(secretKey)
   const bodyParser = require('body-parser')
@@ -105,15 +99,15 @@ async function createStripePlugin (app, config) {
       [customerTable]: async (request) => {
         // We want to retrieve the customerStripId on every request
         if (request.get && request.get !== '*' && !request[customerStripeId] && !request.get.includes(customerStripeId)) request.get.push(customerStripeId)
-      },
+      }
       // [subscriptionTable]: async (request) => {
       //   // We want to retrieve the customerStripId on every request
       //   if (request.get && request.get !== '*' && !request[subscriptionStripeId] && !request.get.includes(subscriptionStripeId)) request.get.push(subscriptionStripeId)
       // },
-      [subscriptionItemTable]: async (request) => {
-        // We want to retrieve the customerStripId on every request
-        if (request.get && request.get !== '*' && !request[subscriptionItemStripeId] && !request.get.includes(subscriptionItemStripeId)) request.get.push(subscriptionItemStripeId)
-      }
+      // [subscriptionItemTable]: async (request) => {
+      //   // We want to retrieve the customerStripId on every request
+      //   if (request.get && request.get !== '*' && !request[subscriptionItemStripeId] && !request.get.includes(subscriptionItemStripeId)) request.get.push(subscriptionItemStripeId)
+      // }
     },
     onCreation: {
       [customerTable]: async (created, { local }) => {
@@ -131,12 +125,12 @@ async function createStripePlugin (app, config) {
       [customerTable]: async (results, { request }) => {
         if (!Array.isArray(request.get)) return
         return Promise.all(results.map(result => {
-          const stripeId = result[customerStripeId];
-          if (!stripeId) return Promise.resolve();
-          const customer = stripe.customers.retrieve(stripeId, { expand: ['subscriptions'] });
-          if (Array.isArray(request.get)) Object.assign(result, filterObject(customer, request.get));
-        })).then(() => { });
-      },
+          const stripeId = result[customerStripeId]
+          if (!stripeId) return Promise.resolve()
+          const customer = stripe.customers.retrieve(stripeId, { expand: ['subscriptions'] })
+          if (Array.isArray(request.get)) Object.assign(result, filterObject(customer, request.get))
+        })).then(() => { })
+      }
       // [subscriptionTable]: async (results, { request }) => {
       //   if (!Array.isArray(request.get)) return
       //   return Promise.all(results.map(result => {
@@ -146,15 +140,15 @@ async function createStripePlugin (app, config) {
       //     if (Array.isArray(request.get)) Object.assign(result, filterObject(subscription, request.get));
       //   })).then(() => {})
       // },
-      [subscriptionItemTable]: async (results, { request }) => {
-        if (!Array.isArray(request.get)) return
-        return Promise.all(results.map(result => {
-          const stripeId = result[subscriptionItemStripeId]
-          if (!stripeId) return Promise.resolve()
-          const subscriptionItem = stripe.customers.retrieve(stripeId)
-          if (Array.isArray(request.get)) Object.assign(result, filterObject(subscriptionItem, request.get));
-        })).then(() => {})
-      }
+      // [subscriptionItemTable]: async (results, { request }) => {
+      //   if (!Array.isArray(request.get)) return
+      //   return Promise.all(results.map(result => {
+      //     const stripeId = result[subscriptionItemStripeId]
+      //     if (!stripeId) return Promise.resolve()
+      //     const subscriptionItem = stripe.customers.retrieve(stripeId)
+      //     if (Array.isArray(request.get)) Object.assign(result, filterObject(subscriptionItem, request.get))
+      //   })).then(() => {})
+      // }
     },
     onSuccess: async (_results, { local, query }) => {
       if (local.stripeCreated) {

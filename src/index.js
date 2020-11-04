@@ -177,9 +177,9 @@ function defaultErrorHandler (err, _req, res, next) {
         res.end(err.message)
         break
       case TOO_MANY_REQUESTS:
-        res.writeHead(429);
+        res.writeHead(429)
         res.end(err.message)
-        break;
+        break
       case DATABASE_ERROR:
         res.writeHead(500)
         res.end(err.message)
@@ -201,5 +201,4 @@ function defaultErrorHandler (err, _req, res, next) {
     }
   }
   next(err)
-
 }

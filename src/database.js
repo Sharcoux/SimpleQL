@@ -383,7 +383,7 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
            */
           function formatRequest (request) {
             // When we delete an object, we want to retrieve all their data before it disappear from the database
-            if(request.delete) request.get = '*'
+            if (request.delete) request.get = '*'
             // We allow using '*' to mean all columns
             if (request.get === '*') {
               const tableData = classifyData(table)
