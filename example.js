@@ -1,14 +1,17 @@
+// @ts-check
+
 /* eslint-disable no-cond-assign */
 /** This is a sample code of a server that works like a messenger where you can exhange messages with your contacts. */
-const { createServer, is, or, member, count, none, all, not, and, plugins: { loginPlugin, securityPlugin } } = require('./src')
+const { createServer, modelFactory, is, or, member, count, none, all, not, and, now, plugins: { loginPlugin, securityPlugin, stripePlugin } } = require('./src')
 const express = require('express')
 
 /*************************************************************************
  *************************** TABLES DECLARATION **************************/
 
 // Generate the tables. Doing it this way make us able to use self-references and cross references between tables
-const [User, Feed, Comment] = new Array(3).fill().map(() => ({}))
-const tables = { User, Feed, Comment }
+/** @type {import('./').Tables} **/
+const tables = {}
+const { User, Feed, Comment } = modelFactory(tables)
 
 // First, just focus on the structure of your data. Describe your table architecture
 Object.assign(User, {
@@ -16,6 +19,7 @@ Object.assign(User, {
   email: 'string/40',
   password: 'binary/64',
   salt: 'binary/16',
+  stripeId: 'string/40',
   contacts: [User],
   invited: [User],
   notNull: ['pseudo', 'email', 'password', 'salt'],
@@ -44,11 +48,11 @@ Object.assign(Comment, {
   author: User,
   date: {
     type: 'dateTime',
-    defaultValue: Date.now
+    defaultValue: now
   },
   lastModification: {
     type: 'dateTime',
-    defaultValue: Date.now
+    defaultValue: now
   },
   notNull: ['title', 'author'],
   index: ['date', 'content/fulltext']
@@ -64,6 +68,7 @@ Object.assign(Feed, {
  ************************* DATABASE CONFIGURATION ************************/
 
 // Provide every configuration detail about your database:
+/** @type {import('./').Database} */
 const database = {
   user: 'root', // the login to access your database
   password: 'password', // the password to access your database
@@ -97,6 +102,10 @@ const rules = {
         is('self'), // Only ourself can invite contacts
         not(member('invited')) // Cannot invite oneself as our own contact
       )
+    },
+    stripeId: {
+      write: none,
+      read: is('self')
     },
     create: all, // Creation is handled by login middleware. No one should create Users from request.
     delete: is('self'), // Users can only delete their own profile
@@ -166,7 +175,9 @@ function customRule () {
  ****************************** CUSTOM PLUGINS ***************************/
 
 // You can always create your own plugin if some fields requier extra attention. See the documentation for more details.
-/** This plugin will handle a complex set of business rule:
+/**
+ * @type {import('./').Plugin}
+ * This plugin will handle a complex set of business rule:
  * 1. Before being able to add a contact, this contact must have invited you or have you as a contact
  * 2. You cannot invite as a contact one of your contacts
  * 3. You cannot invite as a contact someone you already invited
@@ -272,7 +283,7 @@ const customPlugin = {
   },
   // This part will edit the results before it is returned to the end user
   onResult: {
-    User: (results, { request, local: { invited } }) => {
+    User: async (results, { request, local: { invited } }) => {
       if (request.invited && request.invited.add) {
         // We manually add the list of invited users that could not be added, due to credentials issues. This is just to demonstrate how `local` variable and onResult function might work
         // WARNING: This is probably a security issue. We only do this for demonstration purpose.
@@ -285,6 +296,7 @@ const customPlugin = {
 const app = express()
 app.listen(80).on('error', error => {
   console.error(error)
+  // @ts-ignore
   if (error.code === 'EACCES') {
     console.log(`It seems that you don't have right to run node on port 80. You should try the following approaches:
     * Run the process as root, then drop the privileges
@@ -296,26 +308,36 @@ app.listen(80).on('error', error => {
   process.exit()
 })
 
-const plugins = []
+module.exports = async () => {
+  const plugins = []
 
-// Add a plugin enforcing default security parameters in production
-if (process.env.NODE_ENV === 'production') {
-  plugins.push(securityPlugin({
-    app,
-    domains: ['mydomain.com', 'www.mydomain.com'],
-    webmaster: 'webmaster@mydomain.com'
+  // Add a plugin enforcing default security parameters in production
+  if (process.env.NODE_ENV === 'production') {
+    plugins.push(securityPlugin(app, {
+      domains: ['mydomain.com', 'www.mydomain.com'],
+      webmaster: 'webmaster@mydomain.com'
+    }))
+  }
+
+  // Add a plugin that enables basic login/password authentication
+  plugins.push(loginPlugin({
+    login: 'email',
+    password: 'password',
+    salt: 'salt',
+    userTable: 'User'
   }))
+
+  // Add a plugin that enable communication with stripe
+  const stripe = await stripePlugin(app, {
+    customerTable: 'User',
+    database: database.database,
+    secretKey: 'sk_test_51HfViKKIGDSYwsauSDJubPHtmVntPrwkGE0ZCxyMROd7hpmHaPI5X6aPqC77ot06ZhHmJ5ofNje3pXiJXn44BFx500rwkO05Hi',
+    webhookURL: 'http://localhost/stripe-webhook'
+  })
+  plugins.push(stripe)
+
+  // Add our custom plugin to handle specific behaviours for some requests
+  plugins.push(customPlugin)
+
+  return createServer({ app, tables, database, rules, plugins })
 }
-
-// Add a plugin that enables basic login/password authentication
-plugins.push(loginPlugin({
-  login: 'email',
-  password: 'password',
-  salt: 'salt',
-  userTable: 'User'
-}))
-
-// Add our custom plugin to handle specific behaviours for some requests
-plugins.push(customPlugin)
-
-module.exports = () => createServer({ app, tables, database, rules, plugins })

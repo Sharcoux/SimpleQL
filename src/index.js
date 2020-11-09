@@ -8,20 +8,23 @@ const accessControl = require('./accessControl')
 const bodyParser = require('body-parser')
 const log = require('./utils/logger')
 const plugins = require('./plugins')
-const { stringify } = require('./utils')
+const { stringify, modelFactory, now } = require('./utils')
 const rateLimit = require('express-rate-limit')
+const createRequestHandler = require('./requestHandler')
 
 /** @typedef {import('./plugins').Plugin} Plugin */
 /** @typedef {Plugin[]} Plugins */
 /** @typedef {import('./accessControl').Rules} Rules */
 /** @typedef {import('./utils').TableDeclaration} Table */
 /** @typedef {import('./utils').TablesDeclaration} Tables */
-/** @typedef {import('./database').Database} Database */
+/** @typedef {import('./database').DatabaseConfig} Database */
 
 /**
  * @callback Query
  * @param {import('./utils').Request} query The SimpleQL request
- * @param {string | number=} authId The id for the user making the request. If not provided, uses admin rights.
+ * @param {import('express').Response['locals'] & import('./plugins').Local=} locals If the request comes from a client, provide here the value of response.locals from Express.Response.
+ * You can specify local.authId to execute the request on the behalf of a particular user, and local.readOnly to skip the steps that edit the database.
+ * If you provide nothing, the request will be executed as administrator.
  * @returns {Promise<import('./utils').Result>} The results of the SimpleQl request
  **/
 
@@ -43,11 +46,8 @@ module.exports = {
   errors,
   plugins,
   getQuery,
-  /**
-   * @param {{}} tables The global object that will hold the tables
-   * @returns {any} An object that can be destructurated
-   */
-  modelFactory: tables => new Proxy(tables, { get: (target, name) => (target[name] = {}) })
+  modelFactory,
+  now
 }
 
 /**
@@ -83,53 +83,53 @@ async function createServer ({ tables = {}, database, rules = {}, plugins = [], 
   // Create the promise to get the query function to make requests to the database from the server
   const databaseName = database.database
   /** @type {(query: Query) => void} */
-  let dbReady = () => {}// Callback when the db is ready
+  let dbReady = () => {} // Callback when the db is ready
   /** @type {(error: any) => void} */
-  let dbReject = () => {}// Callback if the db failed
-  if (database && databaseName && Object(databaseName) instanceof String) {
+  let dbReject = () => {} // Callback if the db failed
+  if (database && databaseName && typeof databaseName === 'string') {
     // Creates, for the database, a promise that will resolve only once the db is ready
     dbQuery[databaseName] = new Promise((resolve, reject) => { dbReady = resolve; dbReject = reject })
     // We initialize the stack with a promise that will resolve once the database is ready
     dbQueryStack[databaseName] = dbQuery[databaseName].then(() => ({}))
   }
 
-  return checkParameters({ tables, database, rules, plugins })
+  try {
+    await checkParameters({ tables, database, rules, plugins })
     // Create the database
-    .then(() => createDatabase({ tables, database, rules, plugins }))
-    .then(requestHandler => {
-      log('info', `${databaseName} database ready to be used!`)
-      // parse application/x-www-form-urlencoded
-      app.use(root, bodyParser.urlencoded({ extended: false, limit: '1mb' }))
-      // parse application/json
-      app.use(root, bodyParser.json({ limit: sizeLimit }))
-      // Limit amount of requests handled
-      if (requestPerMinute) {
-        const apiLimiter = rateLimit({
-          windowMs: 60 * 1000, // 1 minute
-          max: requestPerMinute
-        })
-        app.use(root, apiLimiter)
-      }
-      // Add the middlewares
-      allMiddlewares.forEach(m => app.use(root, m))
-      // Listen to simple QL requests
-      app.all(root, simpleQL(databaseName))
-      // Add error handlers
-      errorHandlers.forEach(h => app.use(root, h))
-      // Final error handler, ditching error
-      app.use(root, (_err, _req, _res, next) => next())
-      log('info', 'Simple QL server ready!')
-      // Enable server side requests by providing a query function.
-      // We make sure that the previous request is over before it is possible to make a new one.
-      /** @type {Query} */
-      const dbQuery = (query, authId = database.privateKey) => dbQueryStack[databaseName] = dbQueryStack[databaseName].catch(() => {}).then(() => requestHandler(authId, query))
-      dbReady(dbQuery)
-      return dbQuery
-    })
-    .catch(err => {
-      dbReject(err)
-      return Promise.reject(err)
-    })
+    const { tables: preparedTables, tablesModel, driver, rules: preparedRules } = await createDatabase({ tables, database, rules, plugins })
+    const requestHandler = await createRequestHandler({ tables: preparedTables, tablesModel, driver, rules: preparedRules, privateKey: database.privateKey, plugins })
+    log('info', `${databaseName} database ready to be used!`)
+    // parse application/x-www-form-urlencoded
+    app.use(root, bodyParser.urlencoded({ extended: false, limit: '1mb' }))
+    // parse application/json
+    app.use(root, bodyParser.json({ limit: sizeLimit }))
+    // Limit amount of requests handled
+    if (requestPerMinute) {
+      const apiLimiter = rateLimit({
+        windowMs: 60 * 1000, // 1 minute
+        max: requestPerMinute
+      })
+      app.use(root, apiLimiter)
+    }
+    // Add the middlewares
+    allMiddlewares.forEach(m => app.use(root, m))
+    // Listen to simple QL requests
+    app.all(root, simpleQL(databaseName))
+    // Add error handlers
+    errorHandlers.forEach(h => app.use(root, h))
+    // Final error handler, ditching error
+    app.use(root, (_err, _req, _res, next) => next())
+    log('info', 'Simple QL server ready!')
+    // Enable server side requests by providing a query function.
+    // We make sure that the previous request is over before it is possible to make a new one.
+    /** @type {Query} */
+    const dbQuery = (query, locals = { authId: database.privateKey, readOnly: false }) => dbQueryStack[databaseName] = dbQueryStack[databaseName].catch(() => {}).then(() => requestHandler(query, locals))
+    dbReady(dbQuery)
+    return dbQuery
+  } catch (err) {
+    dbReject(err)
+    return Promise.reject(err)
+  }
 }
 
 /**
@@ -139,10 +139,9 @@ async function createServer ({ tables = {}, database, rules = {}, plugins = [], 
  **/
 function simpleQL (databaseName) {
   return async (req, res, next) => {
-    const authId = res.locals.authId || ''
     // We forward the request to the database
     getQuery(databaseName)
-      .then(query => query(req.body, authId))
+      .then(query => query(req.body, /** @type {import('./plugins').Local} **/(res.locals)))
       .then(results => {
         res.json(results)
         next()
@@ -195,6 +194,7 @@ function defaultErrorHandler (err, _req, res, next) {
         res.end(err.message)
         break
       default:
+        console.error(err)
         res.writeHead(500)
         res.end(err.message || stringify(err))
         break

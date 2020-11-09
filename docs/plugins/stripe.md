@@ -2,18 +2,19 @@
 
 ## General configuration
 
-To use the plugin, you will need to provide the following informations:
+To use the plugin, you will need to provide the following parameters:
 
  * **app**: The Express application
+ * **config**: The Stripe Plugin configuration.
+
+ The `config` parameter is an object with the following properties:
+
  * **secretKey**: You Stripe secret API key
- * **webhookURL**: The full url Stripe should use for webhooks. The app will be set to listen to this path. You don't have to do it.
  * **customerTable**: The table where the users will be stored in the SimpleQL database
  * **customerStripeId**: The column where the Stripe customer id can be stored in the user table
- * **subscriptionTable** (*optional*): The table where the subscriptions will be stored in the SimpleQL database
- * **subscriptionStripeId** (*optional*): The column where the Stripe subscription id can be stored in the subscription table
- * **subscriptionItemTable** (*optional*): The table where the subscription items will be stored in the SimpleQL database
- * **subscriptionItemStripeId** (*optional*): The column where the Stripe subscriptionItem id can be stored in the subscriptionItem table
  * **database**: The name of the SimpleQL database
+ * **webhookURL**: The full url Stripe should use for webhooks. The app will be set to listen to this path. You don't have to do it.
+ * **webhookSecret** (*optional*): The secret key provided by stripe for [testing webhooks locally](https://stripe.com/docs/webhooks/test) 
  * **listeners** (*optional*): An object mapping the stripe webhooks to their listeners
 
 When **creating** or **deleting** a user with SimpleQL, the user will automatically be created/deleted on the **Stripe** database, and the `customerStripeId` will be added in the user table.

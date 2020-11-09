@@ -4,7 +4,13 @@ const loginPlugin = require('./login')
 const securityPlugin = require('./security')
 const stripePlugin = require('./stripe')
 
-/** @typedef {{ authId: string | number } & Object.<string, any>} Local */
+/**
+ * @typedef {Object} LocalParam
+ * @property {string | number} authId Indicates the id of the user this request is being executed as. Use database.privateKey for admin rights.
+ * @property {boolean} readOnly Indicates if this request is not supposed to make any change on the database. This will skip unnessessary treatments.
+ **/
+
+/** @typedef {Object.<string, any> & LocalParam} Local An object being shared through the request **/
 
 /**
  * @typedef {Object} OnEventParam
@@ -39,8 +45,9 @@ const stripePlugin = require('./stripe')
 /** @typedef {Object.<string, (request: import('../utils').Request, onEvent: OnEventParam) => Promise<void>>} onRequest **/
 /** @typedef {Object.<string, (createdObject: import('../utils').Element, onEvent: OnEventParam) => Promise<void>>} onCreation **/
 /** @typedef {Object.<string, (deletedObjectsArray: import('../utils').Element[], onEvent: OnEventParam) => Promise<void>>} onDeletion **/
-/** @typedef {Object.<string, (results: import('../utils').Element[], onEvent: OnEventParam) => Promise<import('../utils').Element[]>>} onProcessing **/
+/** @typedef {Object.<string, (results: import('../utils').Element[], onEvent: OnEventParam) => Promise<void>>} onProcessing **/
 /** @typedef {Object.<string, (results: import('../utils').Element[], onEvent: OnEventParam) => Promise<void>>} onResult **/
+/** @typedef {Object.<string, (results: { [table: string]: import('../utils').Element[] }, onEvent: OnEventParam) => Promise<void>>} onResponse **/
 /** @typedef {(results: import('../utils').Result, onEvent: OnEventParam) => Promise<void>} onSuccess **/
 /** @typedef {(error: import('../errors').Error, onEvent: OnEventParam) => Promise<void>} onError **/
 /** @typedef {Object.<string, (results: UpdateResults, onEvent: OnEventParam) => Promise<import('../utils').Element[]>>} onUpdate **/
@@ -56,12 +63,15 @@ const stripePlugin = require('./stripe')
  * @property {onDeletion=} onDeletion An object containing functions being called each time an element is deleted from a specific table.
  * @property {onProcessing=} onProcessing An object containing functions being called after the execution of every depending request, but before any changes have been applied to the current results.
  * @property {onResult=} onResult An object containing functions being called after a request was resolved in a specific table.
- * @property {onSuccess=} onSuccess An object containing functions being called when the whole request succeeds to resolve in the database and is about to be commited.
- * @property {onError=} onError An object containing functions being called when a request failed to resolve in the database and is about to be rolled back.
+ * @property {onSuccess=} onSuccess A function being called after the whole request was resolved, just before commiting the changes in the database and returning the results to the client.
+ * @property {onError=} onError A function being called when a request failed to resolve in the database and is about to be rolled back.
  * @property {onUpdate=} onUpdate An object containing functions being called after data have been changed in a specific table.
  * @property {onListUpdate=} onListUpdate An object containing functions being called after some objects have been linked or unlinked to existing objects of the specified teblaes.
  */
 
+/**
+ * @type { { loginPlugin: import('./login'), securityPlugin: import('./security'), stripePlugin: import('./stripe') } }
+ */
 module.exports = {
   loginPlugin,
   securityPlugin,

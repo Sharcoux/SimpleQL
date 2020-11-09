@@ -4,16 +4,10 @@
 const { WRONG_VALUE, CONFLICT, REQUIRED } = require('../errors')
 const Driver = require('./template')
 
-/** @type {import('mysql')} */
-// @ts-ignore
-const mysql = {}
-try {
-  Object.assign(mysql, require('mysql'))
-} catch (err) {
-  throw new Error('You must run `npm add mysql -S` to be able to use `mysql` database.')
-}
-const { isPrimitive, operators, sequence, ensureCreation } = require('../utils')
+const { isPrimitive, operators, sequence, ensureCreation, getOptionalDep, now } = require('../utils')
 const log = require('../utils/logger')
+/** @type {import('mysql')} */
+const mysql = getOptionalDep('mysql', 'MySQL database type')
 
 // Shortcuts for escaping
 /* Escaping values */
@@ -46,6 +40,7 @@ class MysqlDriver extends Driver {
     this.create = this.create.bind(this)
     this.delete = this.delete.bind(this)
     this.createTable = this.createTable.bind(this)
+    this.createForeignKeys = this.createForeignKeys.bind(this)
     this.processTable = this.processTable.bind(this)
     this._escapeValue = this._escapeValue.bind(this)
     this._createQuery = this._createQuery.bind(this)
@@ -126,7 +121,7 @@ class MysqlDriver extends Driver {
     if (order) query += ` ORDER BY ${order.map(column => (column.startsWith('-') ? `${ei(column.substring(1))} DESC` : `${ei(column)} ASC`)).join(', ')}`
     if (limit) query += ` LIMIT ${es(limit)}`
     if (offset) query += ` OFFSET ${es(offset)}`
-    return this.query(query).catch(errorHandler(table)).then(results => {
+    return this.query(query).catch(errorHandler(table, 'get')).then(results => {
       log('database result', JSON.stringify(results))
       return Array.isArray(results) ? results : [results]
     })
@@ -141,13 +136,13 @@ class MysqlDriver extends Driver {
     // If a condition specify that no value is accepted for a column, no result will match the constraint
     if (Object.values(where).find(v => Array.isArray(v) && v.length === 0)) return Promise.resolve([])
     const query = this._createQuery(`DELETE FROM ${ei(table)}`, where, table)
-    return this.query(query).catch(errorHandler(table))
+    return this.query(query).catch(errorHandler(table, 'delete'))
   }
 
   /**
    * Insert an entry into the current database
    * @param {import('./template').CreateParam} createParam The object describing the request
-   * @returns {Promise<boolean[]>} The results
+   * @returns {Promise<any>} The results
    */
   async create ({ table, elements }) {
     if (!elements) return Promise.resolve([])
@@ -170,7 +165,7 @@ class MysqlDriver extends Driver {
       ) VALUES (
         ${Object.keys(element).map(k => this._escapeValue(table, k, element[k])).join(', ')}
       )`
-      return this.query(query).catch(errorHandler(table)).then(results => Array.isArray(results) ? results.map(result => result.insertId) : results.insertId)
+      return this.query(query).catch(errorHandler(table, 'create')).then(results => Array.isArray(results) ? results.map(result => result.insertId) : results.insertId)
     }))
   }
 
@@ -205,7 +200,7 @@ class MysqlDriver extends Driver {
       return `${ei(key)}=${this._escapeValue(table, key, value)}`
     }).join(', ')
     const query = this._createQuery(`UPDATE ${ei(table)} SET ${setQuery}`, where, table)
-    return this.query(query).catch(errorHandler(table))
+    return this.query(query).catch(errorHandler(table, 'update'))
   }
 
   /**
@@ -216,9 +211,10 @@ class MysqlDriver extends Driver {
    */
   _processColumnType (table, name, data) {
     const { type, length } = data
+    const lengthRequired = ['char', 'binary', 'varbinary', 'decimal', 'varchar', 'string']
     // We record binary columns to not escape their values during INSERT or UPDATE
     if (type === 'binary' || type === 'varbinary') this.binaries.push(`${table}.${name}`)
-    if ((type === 'string' || type === 'varchar' || type === 'varbinary') && !length) throw new Error(`You must specify the length of columns of type ${type}, such as ${name} in ${table}.`)
+    if (lengthRequired.includes(type) && !length) throw new Error(`You must specify the length of columns of type ${type}, such as ${name} in ${table}.`)
     else if (type === 'dateTime') this.dates.push(`${table}.${name}`)
     else if (type === 'json') this.json.push(`${table}.${name}`)
   }
@@ -253,7 +249,7 @@ class MysqlDriver extends Driver {
       if (length) query += `(${length})`
       if (unsigned) query += ' UNSIGNED'
       if (notNull) query += ' NOT NULL'
-      if (defaultValue) query += ` DEFAULT ${this._escapeValue(table, name, defaultValue instanceof Function ? defaultValue() : defaultValue)}`
+      if (defaultValue) query += ` DEFAULT ${this._escapeValue(table, name, defaultValue === now ? 'NOW' : defaultValue)}`
       if (autoIncrement) query += ' AUTO_INCREMENT'
       return query
     })
@@ -276,7 +272,7 @@ class MysqlDriver extends Driver {
       ${columns.join(',\n      ')}
       ${indexes.join('\n      ')}
       , CONSTRAINT PK_${table} PRIMARY KEY (reservedId)
-    )`).catch(errorHandler(table))
+    )`).catch(errorHandler(table, 'createTable'))
   }
 
   /**
@@ -291,7 +287,7 @@ class MysqlDriver extends Driver {
       return this.query(`
         ALTER TABLE ${tableName}
         ${query}
-      `).catch(errorHandler(tableName))
+      `).catch(errorHandler(tableName, 'createForeignKeys'))
     }))
   }
 
@@ -390,10 +386,13 @@ function convertType (type) {
 /**
  * An handler to handle mysql errors
  * @param {string} table The table name
+ * @param {'get' | 'create' | 'delete' | 'update' | 'createForeignKeys' | 'createTable'} operation The operation where the issue occured
  */
-function errorHandler (table) {
+function errorHandler (table, operation) {
   return error => {
-    if (error.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' && error.sqlMessage.includes('Access denied')) { return Promise.reject({ name: WRONG_VALUE, message: 'You are not allowed to access some data needed for your request.' }) } else if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' && error.sqlMessage.includes('Access denied')) {
+      return Promise.reject({ name: WRONG_VALUE, message: `You are not allowed to access some data needed for your request ${operation} in table ${table}.` })
+    } else if (error.code === 'ER_DUP_ENTRY') {
       const message = error.sqlMessage.replace(`I_${table}_`, '')
       const [dup, ids, key, tables] = message.split('\'')
       const [tableNames, property] = tables.split('_').map(name => name.replace('Id', ''))
@@ -401,33 +400,33 @@ function errorHandler (table) {
       // Array association
       if (table === propertyName + property) {
         const [propertyId, id] = ids.split('-')
-        return Promise.reject({ name: CONFLICT, message: `${dup}: Object ${id} received another occurence of ${property} ${propertyId}${key}${propertyName} whereas the association was expected to be unique.` })
+        return Promise.reject({ name: CONFLICT, message: `${dup}: Object ${id} received another occurence of ${property} ${propertyId}${key}${propertyName} whereas the association was expected to be unique. Occured during operation ${operation} in table ${table}` })
       }
       // Normal table
       else {
-        return Promise.reject({ name: CONFLICT, message: `${dup}: Table ${tableName} received a second object with ${propertyName} ${ids} whereas it was expected to be unique.` })
+        return Promise.reject({ name: CONFLICT, message: `${dup}: Table ${tableName} received a second object with ${propertyName} ${ids} during ${operation} operation, whereas it was expected to be unique.` })
       }
-    } else if (error.code === 'ER_NO_DEFAULT_FOR_FIELD') return Promise.reject({ name: REQUIRED, message: `${error.sqlMessage}, was not specified in the request, and is required in table ${table}.` })
+    } else if (error.code === 'ER_NO_DEFAULT_FOR_FIELD') return Promise.reject({ name: REQUIRED, message: `${error.sqlMessage}, was not specified in the request, and is required in table ${table} for ${operation} operation.` })
     else {
       console.error(error)
-      return Promise.reject({ name: error.code, message: error.sqlMessage })
+      return Promise.reject({ name: error.code, message: `${error.sqlMessage}. It occured in ${table} table during ${operation} operation` })
     }
   }
 }
 
 /**
  * Database creation
- * @param {import('../database').Database & import('mysql').PoolConfig} mysqlParam Driver configuration
+ * @param {import('../database').DatabaseConfig} mysqlParam Driver configuration
  * @returns {Promise<import('./template')>} Returns the driver to communicate with the database
  */
-async function createDatabase ({ database = 'simpleql', charset = 'utf8', create = false, host = 'localhost', connectionLimit = 100, ...parameters }) {
+async function createDatabase ({ database = 'simpleql', charset = 'utf8', create = false, unprotect = false, host = 'localhost', connectionLimit = 100, ...parameters }) {
   return Promise.resolve().then(() => {
     if (!create) return Promise.resolve()
     // Instantiate a connection to create the database
     const pool = mysql.createPool({ ...parameters, connectionLimit, host })
     const driver = new MysqlDriver(pool)
     return driver.query(`SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${database}'`)
-      .then(exists => exists.length && ensureCreation(database))
+      .then(exists => exists.length && !unprotect && ensureCreation(database))
       // Destroy previous database if required
       .then(() => driver.query(`DROP DATABASE IF EXISTS ${database}`))
       .catch(err => {

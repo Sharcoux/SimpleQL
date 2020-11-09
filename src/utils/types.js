@@ -70,7 +70,6 @@ const login = {
 
 /** @type Model */
 const security = {
-  app: 'function',
   domains: ['string'],
   emailACME: 'string',
   requestPerMinute: 'integer',
@@ -82,15 +81,11 @@ const security = {
 const stripe = {
   secretKey: 'string',
   customerTable: 'string',
-  customerStripeId: 'string',
-  subscriptionTable: 'string',
-  subscriptionStripeId: 'string',
-  subscriptionItemTable: 'string',
-  subscriptionItemStripeId: 'string',
   webhookURL: 'string',
+  webhookSecret: 'string',
   listeners: {},
   database: 'string',
-  required: ['app', 'secretKey', 'customerTable', 'customerStripeId', 'database', 'webhookURL', 'database'],
+  required: ['secretKey', 'customerTable', 'webhookURL', 'database'],
   strict: true
 }
 

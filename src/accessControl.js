@@ -283,7 +283,8 @@ async function checkInTable ({ field, tables, tableName, authId, object, request
   * @property {PreparedRule=} remove Rules to remove elements
   */
 
-/** @typedef {{ [tableName: string]: { [column: string]: ColumnRule} & TableRule }} Rules */
+/** @typedef {Object.<string, ColumnRule | Rule> & TableRule} FullTableRule */
+/** @typedef {{ [tableName: string]: FullTableRule }} Rules */
 /** @typedef {{ [tableName: string]: { [column: string]: PreparedColumnRule} & PreparedTableRule }} PreparedRules */
 
 module.exports = {

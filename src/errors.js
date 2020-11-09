@@ -12,7 +12,7 @@ const errors = {
   WRONG_VALUE: 'WRONG_VALUE',
   CONFLICT: 'CONFLICT',
   TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS'
-};
+}
 
 /**
  * @typedef {Object} Error
@@ -21,4 +21,4 @@ const errors = {
  * @property {number} status The status code
  */
 
-module.exports = errors;
+module.exports = errors

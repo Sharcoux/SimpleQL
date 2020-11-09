@@ -10,15 +10,20 @@ const path = require('path')
 
 /**
  * @typedef {Object} SecurityPluginConfig
- * @property {import('express').Express} app The express app
  * @property {string[]} domains The domain this server should be hosted on
- * @property {string} emailACME The email of the person responsible for the domain
+ * @property {string} webmaster The email of the person responsible for the domain
  * @property {Object=} helmet The helmet configuration
  */
 
-const createSecurityPlugin = config => {
+/**
+ * Create the security plugin
+ * @param {import('express').Express} app The express app
+ * @param {SecurityPluginConfig} config The plugin configuration
+ * @returns {import('.').Plugin}
+ */
+const createSecurityPlugin = (app, config) => {
   check(securityModel, config)
-  const { app, domains, webmaster, helmet: helmetConfig } = config
+  const { domains, webmaster, helmet: helmetConfig } = config
   const helmet = getOptionalDep('helmet', 'SecurityPlugin')
   const greenlock = getOptionalDep('greenlock-express', 'SecurityPlugin')
 
@@ -46,21 +51,30 @@ const createSecurityPlugin = config => {
   })
 
   // Read the current config file
-  const configRawContent = fs.readFileSync(path.normalize(path.join(packageRoot, configDir, 'config.json')), 'utf8')
+  let configRawContent = null
+  try {
+    configRawContent = fs.readFileSync(path.normalize(path.join(packageRoot, configDir, 'config.json')), 'utf8')
+  } catch (err) {
+    if (err.code !== 'ENOENT') { console.error(err.code, err); process.exit() }
+  }
 
   // Update sites with available data if exist
   let configFile = { sites }
   if (configRawContent) {
     configFile = JSON.parse(configRawContent)
-    configFile.sites = sites.map(({ subject, altNames }) => {
+    configFile.sites = sites.map(({ subject, altnames }) => {
       const configSiteData = configFile.sites.find(site => site.subject === subject) || {}
-      return { ...configSiteData, subject, altNames }
+      return { ...configSiteData, subject, altnames }
     })
   }
 
   // Write the updated file content
-  fs.writeFileSync(path.normalize(path.join(packageRoot, configDir, 'config.json')), JSON.stringify(configFile, null, 4), 'utf8')
+  const configPath = path.normalize(path.join(packageRoot, configDir, 'config.json'))
+  fs.writeFileSync(configPath, JSON.stringify(configFile, null, 4), 'utf8')
+  // Fix the file's permissions after greenlock restricted them
+  fs.chmodSync(configPath, 0o660)
 
+  // Start greenlock
   greenlock.init({
     packageRoot,
     configDir,

@@ -385,6 +385,7 @@ createTestServer()
   .then(() => test([
     createTest(false, 'Forbidden : wrong JWT', { User: { get: '*' } })
   ]))
+  .then(() => Testing.setJWT(''))
 
   // Concurrent server-side request test
   .then(() => {
@@ -405,6 +406,37 @@ createTestServer()
       }
     }))])
   })
+
+  .then(() => test(createTest(true, 'Login as User1', {
+    User: {
+      email: 'user1@email.com',
+      password: 'test'
+    }
+  })))
+
+  .then(response => Testing.setJWT(response.data.User[0].jwt))
+
+  // Simple QL requests
+  .then(() => test([
+    createTest(true, 'Retrieve Customer from Stripe', {
+      Customer: { get: '*' }
+    }),
+    createTest(true, 'Retrieve Products from Stripe', {
+      Product: { get: '*' }
+    }),
+    createTest(true, 'Retrieve Prices from Stripe', {
+      Price: { get: '*' }
+    }),
+    createTest(true, 'Retrieve Plans from Stripe', {
+      Plan: { get: '*' }
+    }),
+    createTest(true, 'Retrieve Subscriptions from Stripe', {
+      Subscription: { get: '*' }
+    }),
+    createTest(true, 'Retrieve SubscriptionItems from Stripe', {
+      SubscriptionItem: { get: '*' }
+    })
+  ]))
 
   .then(() => console.log('Tests successful!'))
 

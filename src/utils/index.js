@@ -31,6 +31,17 @@ function intersection (array1, array2) {
 }
 
 /**
+ * Returns the fusion between array1 and array2
+ * @template T
+ * @param {T[]} array1 The first array
+ * @param {T[]} array2 The second array
+ * @returns {T[]} The fusion
+**/
+function merge (array1, array2) {
+  return array2.concat(array1.filter(elt => array2.includes(elt)))
+}
+
+/**
  * Resolve if any of the promises resolves.
  * @template T
  * @param {(() => Promise<T>)[]} funcs The promise functions
@@ -200,7 +211,7 @@ function classifyRequestData (request, table) {
   if (request.get === '*') request.get = [...tableData.primitives]
   // get must be an array by now
   if (request.get && !Array.isArray(request.get)) {
-    // @ts-ignore
+    // eslint-disable-next-line no-throw-literal
     throw {
       name: BAD_REQUEST,
       message: `get property must be an array of string in table ${table.tableName} in request ${JSON.stringify(request)}.`
@@ -210,7 +221,7 @@ function classifyRequestData (request, table) {
   if (request.get) {
     intersection([...tableData.objects, ...tableData.arrays], request.get).forEach(key => {
       if (request[key]) {
-        // @ts-ignore
+        // eslint-disable-next-line no-throw-literal
         throw {
           name: BAD_REQUEST,
           message: `In table ${table.tableName}, the request cannot contain value ${key} both in the 'get' instruction and in the request itself.`
@@ -281,10 +292,22 @@ const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', 
  * @typedef {(request: import('../utils').Request, options: RequestOptions) => Promise<Result>} QueryFunction
  */
 
+/**
+ * @param {{}} tables The global object that will hold the tables
+ * @returns {any} An object that can be destructurated
+ */
+function modelFactory (tables) {
+  return new Proxy(tables, { get: (target, name) => (target[name] = {}) })
+}
+
+/** Use as defaultValue to resolve as current dateTime. */
+const now = 'CURRENT_DATE_TIME'
+
 module.exports = {
   isPrimitive,
   toType,
   intersection,
+  merge,
   stringify,
   filterObject,
   classifyData,
@@ -294,5 +317,7 @@ module.exports = {
   any,
   sequence,
   getOptionalDep,
-  ensureCreation
+  ensureCreation,
+  modelFactory,
+  now
 }

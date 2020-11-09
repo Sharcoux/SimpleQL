@@ -38,6 +38,7 @@
     "express": "^4.17.1"
   },
   "devDependencies": {
+    "@sharcoux/stripe-cli": "^1.5.3",
     "axios": "^0.21.0",
     "dotenv": "^8.2.0",
     "eslint": "^7.12.1",

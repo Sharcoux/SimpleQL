@@ -13,7 +13,6 @@ const { stringify, classifyData, reservedKeys, toType } = require('./utils')
  */
 function checkTables (tables) {
   const acceptedTypes = ['string', 'integer', 'float', 'double', 'decimal', 'date', 'dateTime', 'time', 'year', 'boolean', 'char', 'text', 'binary', 'varbinary', 'varchar', 'json']
-  const lengthRequired = ['char', 'binary', 'decimal', 'varchar', 'srting']
   const numeric = ['integer', 'float', 'decimal', 'double']
   const indexTypes = ['unique', 'fulltext', 'spatial']
   // check values
@@ -40,8 +39,6 @@ function checkTables (tables) {
     function checkConsistency ({ type, length, unsigned, notNull, defaultValue }) {
       // Is the type supported
       if (!acceptedTypes.includes(type)) throw new Error(`${value} is invalid value for ${field} in ${tableName}. Valid types are: ${acceptedTypes.join(', ')}`)
-      // Is the length required and provided
-      if (lengthRequired.includes(type) && !length) throw new Error(`${field} column of type ${type} requires a length parameter in ${tableName}`)
       // Is the type numeric when unsigned is provided
       if (!numeric.includes(type) && unsigned) throw new Error(`column ${field} is of type ${type} which doesn't accept unsigned flag.`)
 

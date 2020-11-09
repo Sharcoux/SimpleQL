@@ -216,124 +216,117 @@ function createLoginPlugin (config) {
       [userTable]: async (request, { query, local, isAdmin }) => {
         // Creating a user
         if (request.create) {
-          return Promise.resolve().then(() => {
-            if (google && request[google]) {
-              // Someone is trying to register with google
-              isString(google, request[google], userTable)
-              return axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${request[google]}`).then(googleUserInfos => {
-                request[login] = googleUserInfos.data.email
-                if (firstname) request[firstname] = googleUserInfos.data.given_name
-                if (lastname) request[lastname] = googleUserInfos.data.family_name
-                request[password] = 'google'// As this is not a hash, no one will be able to connect with this without the access token
-              })
-            } else if (facebook && request[facebook] && request[login]) {
-              // Someone is trying to register with facebook
-              isString(login, request[login], userTable)
-              isString(facebook, request[facebook], userTable)
-              return axios.get(`https://graph.facebook.com/${request[login]}?fields=short_name,last_name,email,name&access_token=${request[facebook]}`).then(result => {
-                request[login] = result.email
-                if (firstname) request[firstname] = result.short_name
-                if (lastname) request[lastname] = result.last_name
-                request[password] = 'facebook'// As this is not a hash, no one will be able to connect with this without the access token
-              })
-            } else if (request[login] && request[password]) {
-              // Someone is trying to register with login/password.
-              isString(login, request[login], userTable)
-              isString(password, request[password], userTable)
-              return processRequestPassword(request, password, salt)
-            } else {
-              // Missing subscription details
-              const googleOption = google ? `, or a ${google}` : ''
-              const facebookOption = facebook ? `, or a ${facebook}` : ''
-              const message = `You need a ${login} and a ${password}${googleOption}${facebookOption} to create an element inside ${userTable}`
-              return Promise.reject({
-                name: BAD_REQUEST,
-                message
-              })
-            }
-          }).then(() => {
-            logger('info', request[login], 'is being created')
-          })
-        // Logging a user
-        } else if (!isAdmin && request.set && request.set[password] && !request.password) {
+          if (google && request[google]) {
+            // Someone is trying to register with google
+            isString(google, request[google], userTable)
+            const googleUserInfos = await axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${request[google]}`)
+            request[login] = googleUserInfos.data.email
+            if (firstname) request[firstname] = googleUserInfos.data.given_name
+            if (lastname) request[lastname] = googleUserInfos.data.family_name
+            request[password] = 'google'// As this is not a hash, no one will be able to connect with this without the access token
+          } else if (facebook && request[facebook] && request[login]) {
+            // Someone is trying to register with facebook
+            isString(login, request[login], userTable)
+            isString(facebook, request[facebook], userTable)
+            const { email, short_name: firstName, last_name: lastName } = await axios.get(`https://graph.facebook.com/${request[login]}?fields=short_name,last_name,email,name&access_token=${request[facebook]}`)
+            request[login] = email
+            if (firstname) request[firstname] = firstName
+            if (lastname) request[lastname] = lastName
+            request[password] = 'facebook'// As this is not a hash, no one will be able to connect with this without the access token
+          } else if (request[login] && request[password]) {
+            // Someone is trying to register with login/password.
+            isString(login, request[login], userTable)
+            isString(password, request[password], userTable)
+            await processRequestPassword(request, password, salt)
+          } else {
+            // Missing subscription details
+            const googleOption = google ? `, or a ${google}` : ''
+            const facebookOption = facebook ? `, or a ${facebook}` : ''
+            const message = `You need a ${login} and a ${password}${googleOption}${facebookOption} to create an element inside ${userTable}`
+            return Promise.reject({
+              name: BAD_REQUEST,
+              message
+            })
+          }
+          logger('info', request[login], 'is being created')
+        }
+        // Editing the password without the previous password being provided
+        else if (!isAdmin && request.set && request.set[password] && !request.password) {
           return Promise.reject({
             name: BAD_REQUEST,
             message: `You need to provide the previous ${password} to be allowed to edit the ${password} inside ${userTable}.`
           })
-        } else {
-          return Promise.resolve().then(() => {
-            if (google && request[google]) {
-              // Someone is trying to login with google
-              isString(google, request[google], userTable)
-              return axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${request[google]}`).then(googleUserInfos => {
-                request[login] = googleUserInfos.data.email
-                request[password] = 'google'
-              })
-            } else if (facebook && request[login] && request[facebook]) {
-              isString(login, request[login], userTable)
-              isString(facebook, request[facebook], userTable)
-              return axios.get(`https://graph.facebook.com/${request[login]}?fields=short_name,last_name,email,name&access_token=${request[facebook]}`).then(result => {
-                request[login] = result.email
-                request[password] = 'facebook'// As this is not a hash, no one will be able to connect with this without the access token
-              })
-            }
-          }).then(() => {
-            if (request[login] && request[password]) {
-              // Someone is trying to log in. We retrieve their data
-              const get = [password, 'reservedId']
-              if (salt) get.push(salt)// We might need the salt if required
-              return query({
-                [userTable]: {
-                  [login]: request[login],
-                  get
-                }
-              }, { readOnly: true, admin: true }).then(({ [userTable]: results }) => {
-                // No user with this login
-                if (results.length === 0) {
-                  return Promise.reject({
-                    name: NOT_FOUND,
-                    message: `${userTable} ${request[login]} not found`
-                  })
-                } else if (results.length > 1) {
-                  return Promise.reject('Should totally not be possible')
-                } else {
-                  // We compare the password provided with the hash in the database
-                  if (request[password] === 'google' || request[password] === 'facebook') {
-                    return Promise.resolve(results[0])
-                  } else {
-                    const { password: hashedPass, salt: saltString } = results[0]
-                    return createHash(request[password], (saltString || '').toString('hex')).then(hash => {
-                      if (hash.equals(hashedPass)) {
-                        return Promise.resolve(results[0])
-                      } else {
-                        return Promise.reject({
-                          name: WRONG_PASSWORD,
-                          message: `Wrong password provided for user ${request[login]}`
-                        })
-                      }
-                    })
-                  }
-                }
-              }).then(({ reservedId }) => {
-                delete request[password]
-                request.reservedId = reservedId
-                const tokens = local.jwt || {}
-                if (!isAdmin) local.authId = reservedId
-                // If the log succeeds, we return a jwt token
-                return createJWT(reservedId, jwtSignConfig)
-                  .then(jwtToken => tokens[reservedId] = jwtToken)
-                  .then(() => local.jwt = tokens)
-              }).then(() => {
-                logger('info', request[login], 'just logged in')
+        }
+        // Logging a user
+        else {
+          // Logging with google or facebook doesn't require password
+          if (google && request[google]) {
+            // Someone is trying to login with google
+            isString(google, request[google], userTable)
+            const googleUserInfos = await axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${request[google]}`)
+            request[login] = googleUserInfos.data.email
+            request[password] = 'google'
+          } else if (facebook && request[login] && request[facebook]) {
+            isString(login, request[login], userTable)
+            isString(facebook, request[facebook], userTable)
+            const result = await axios.get(`https://graph.facebook.com/${request[login]}?fields=short_name,last_name,email,name&access_token=${request[facebook]}`)
+            request[login] = result.email
+            request[password] = 'facebook'// As this is not a hash, no one will be able to connect with this without the access token
+          }
+          if (request[login] && request[password]) {
+            // Someone is trying to log in. We retrieve their data
+            const get = [password, 'reservedId']
+            if (salt) get.push(salt)// We might need the salt if required
+            const { [userTable]: results } = await query({
+              [userTable]: {
+                [login]: request[login],
+                get
+              }
+            }, { readOnly: true, admin: true })
+            let user
+            // No user with this login
+            if (results.length === 0) {
+              return Promise.reject({
+                name: NOT_FOUND,
+                message: `${userTable} ${request[login]} not found`
               })
             }
-          }).then(() => {
-            if (request.set && request.set[password]) {
-              // Someone is trying to update password
-              isString(password, request.set[password], userTable)
-              return processRequestPassword(request.set, password, salt)
+            else if (results.length > 1) {
+              return Promise.reject('Should totally not be possible')
             }
-          })
+            // For Google and Facebook login, we can directly return the result
+            else if (request[password] === 'google' || request[password] === 'facebook') {
+              user = results[0]
+            }
+            // We compare the password provided with the hash from the database
+            else {
+              const { password: hashedPass, salt: saltString } = results[0]
+              const hash = await createHash(request[password], (saltString || '').toString('hex'))
+              if (hash.equals(hashedPass)) {
+                user = results[0]
+              } else {
+                return Promise.reject({
+                  name: WRONG_PASSWORD,
+                  message: `Wrong password provided for user ${request[login]}`
+                })
+              }
+            }
+            const reservedId = user.reservedId
+            delete request[password]
+            request.reservedId = reservedId
+            const tokens = local.jwt || {}
+            if (!isAdmin) local.authId = reservedId
+            // If the log succeeds, we return a jwt token
+            const jwtToken = await createJWT(reservedId, jwtSignConfig)
+            tokens[reservedId] = jwtToken
+            local.jwt = tokens
+            logger('info', request[login], 'just logged in')
+          }
+          if (request.set && request.set[password]) {
+            // Someone is trying to update password
+            isString(password, request.set[password], userTable)
+            return processRequestPassword(request.set, password, salt)
+          }
         }
       }
     },

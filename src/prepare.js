@@ -7,7 +7,9 @@ const { none } = require('./accessControl')
 /** transform tables into sql data types and add a tableName property to each table. Returns the tableModel generated
  * author = User is transformed into authorId = 'integer/10';
  * contacts = [User] creates a new table contactsUser = {userId : 'integer/10', contactsId : 'integer/10'}
- * @param {import('./utils').TablesDeclaration} tables The tables they way they were declared
+ * The TablesDeclaration is also unified, so that short string declaration (like string/20) is transformed into an object: { type: 'string'; length: 20 }.
+ * Same goes for the indexes
+ * @param {import('./utils').TablesDeclaration} tables The tables the way they were declared by the user
  * @returns {{ tablesModel: import('./utils').Tables, tables: import('./utils').FormattedTablesDeclaration }} Returns the table model for the database and the updated tables declaration
 */
 function prepareTables (tables) {

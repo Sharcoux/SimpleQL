@@ -1,10 +1,14 @@
 // @ts-check
 
+/** @typedef {'=' | 'ge' | 'gt' | 'le' | 'lt' | '~' | '>' | '<' | '>=' | '<=' | 'like' | '!' | 'not'} Operator */
+
+/** @typedef {Object.<string, Object.<Operator, Object> | Object>} WhereCondition*/
+
 /**
  * @typedef GetParam Read data in the current database
  * @property {string} table The table name
  * @property {string[]} search The column to look for
- * @property {Object=} where The constraints for the request
+ * @property {WhereCondition=} where The constraints for the request
  * @property {number=} offset Ignore that many first entries
  * @property {number=} limit Return that many entries at most
  * @property {string[]=} order Order the result accorgin to the provided columns. Prepend a '-' to use descending order.
@@ -19,7 +23,7 @@
 /**
 * @typedef CreateParam Insert data into the current database
 * @property {string} table The table name
-* @property {Object | Object[]} elements The elements to insert
+* @property {Object.<string, any> | Object.<string, any>[]} elements The elements to insert
 */
 
 /**
@@ -41,9 +45,6 @@
 * @property {string} table The table name
 * @property {import('../utils').Table} data The columns of the table to create
 */
-
-/** @typedef {'=' | 'ge' | 'gt' | 'le' | 'lt' | '~' | '>' | '<' | '>=' | '<=' | 'like' | '!' | 'not'} Operator */
-
 
 class Driver {
   /** Clear the connection to the database */

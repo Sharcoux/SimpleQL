@@ -46,7 +46,7 @@ Object.keys(colors).forEach(key => colorMap[colors[key]] = `\x1b[${key}m`)
  * @param {LogCategory} category The category of the message going to be logged
  * @param  {...string} data The data to log
  */
-function log(category, ...data) {
+function log (category, ...data) {
   const c = categories[category]
   /* eslint-disable-next-line no-useless-return */
   if (c === undefined) return
