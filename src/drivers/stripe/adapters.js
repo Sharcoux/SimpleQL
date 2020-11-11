@@ -93,16 +93,22 @@ const tableToTableProp = {
  * Build the extra parameter for retrieve and list requests
  * @param {string} table The table name
  * @param {string[]} search The list of columns to search in the database
+ * @param {boolean} retrieve Is this list() or retrieve()? We need this because Stripe API is inconsistent for expand fields
  * @param {Object=} source The constraints on the objects we are looking for
  */
-function buildParameter (table, search, source) {
+function buildParameter (table, search, retrieve, source) {
   // We keep only the parameters accepted by the list() API form Stripe
   const base = source ? filterObject(source, props[table]) : {}
+  // Single child array are flatten
+  Object.keys(base).forEach(key => Array.isArray(base[key]) && base[key].length === 1 && (base[key] = base[key][0]))
   // We cannot accept complex condition object for now. Only primitives are accepted.
   Object.keys(base).forEach(key => !isPrimitive(base[key]) && delete base[key])
   // We expand the expandable fields from Stripe (see Expandable in Stripe documentation)
-  Object.assign(base, { expand: intersection(search, expandable[table]).map(key => 'data.' + key) })
-  console.log(table, search, source, base)
+  Object.assign(base, {
+    expand: intersection(search, expandable[table]).map(key => {
+      return retrieve ? key : ('data.' + key)
+    })
+  })
   return base
 }
 
@@ -117,8 +123,8 @@ function helperGetter (stripe) {
       create: element => stripe[tableToTableProp[table]].create(element),
       delete: element => stripe[tableToTableProp[table]].del(element.id),
       update: (element, values) => stripe[tableToTableProp[table]].update(element.id, values),
-      list: async (params, search) => (await stripe[tableToTableProp[table]].list(buildParameter(table, search, params))).data,
-      retrieve: (element, search) => stripe[tableToTableProp[table]].retrieve(element.id, buildParameter(table, search))
+      list: async (params, search) => (await stripe[tableToTableProp[table]].list(buildParameter(table, search, false, params))).data,
+      retrieve: (element, search) => stripe[tableToTableProp[table]].retrieve(element.id, buildParameter(table, search, true))
     }
   }
 
@@ -129,8 +135,8 @@ function helperGetter (stripe) {
       create: element => stripe.transfers.createReversal(element.transfert, element),
       delete: () => Promise.reject(`Impossible to delete ${table} with Stripe API`),
       update: async (element, values) => { stripe.transfers.updateReversal(element.transfert, element.id, values) },
-      list: async (params, search) => (await stripe.transfers.listReversals(params.transfert, buildParameter(table, search, params))).data,
-      retrieve: (element, search) => stripe.transfers.retrieve(element.transfert, element.id, buildParameter(table, search))
+      list: async (params, search) => (await stripe.transfers.listReversals(params.transfert, buildParameter(table, search, false, params))).data,
+      retrieve: (element, search) => stripe.transfers.retrieve(element.transfert, element.id, buildParameter(table, search, true))
     }
   }
 
@@ -164,13 +170,13 @@ function helperGetter (stripe) {
         : stripe.customers['delete' + table](element.customer, element),
       list: async (params, search) => table === 'Discount'
         ? Promise.reject('Impossible to list discounts from Stripe API')
-        : (await stripe.customers['list' + table + 's'](params.customer, buildParameter(table, search, params))).data,
+        : (await stripe.customers['list' + table + 's'](params.customer, buildParameter(table, search, false, params))).data,
       update: element => (table === 'TaxId' || table === 'Discount')
         ? Promise.reject(`Impossible to update ${table} from Stripe API`)
         : stripe.customers['update' + table](element),
       retrieve: (element, search) => table === 'Discount'
         ? Promise.reject('Impossible to retrieve discount from Stripe API')
-        : stripe.customers['retrieve' + table](element.id, buildParameter(table, search))
+        : stripe.customers['retrieve' + table](element.id, buildParameter(table, search, true))
     }
   }
 
@@ -180,10 +186,10 @@ function helperGetter (stripe) {
       create: element => stripe.accounts['create' + table](element.account, element),
       delete: element => stripe.accounts['delete' + table](element.account, element),
       list: async (params, search) => (table === 'Capability')
-        ? (await stripe.accounts.listCapabilities(params.account, buildParameter(table, search, params))).data
-        : (await stripe.accounts['list' + table + 's'](params.account, buildParameter(table, search, params))).data,
+        ? (await stripe.accounts.listCapabilities(params.account, buildParameter(table, search, false, params))).data
+        : (await stripe.accounts['list' + table + 's'](params.account, buildParameter(table, search, false, params))).data,
       update: element => stripe.accounts['update' + table](element.account, element),
-      retrieve: (element, search) => stripe.accounts['retrieve' + table](element.account, element.id, buildParameter(table, search))
+      retrieve: (element, search) => stripe.accounts['retrieve' + table](element.account, element.id, buildParameter(table, search, true))
     }
   }
 
@@ -193,7 +199,7 @@ function helperGetter (stripe) {
     return {
       create: element => stripe.checkout.sessions.create(element),
       delete: () => Promise.reject(`Impossible to delete ${table} from Stripe API`),
-      list: async (params, search) => (await stripe.checkout.sessions.list(buildParameter(table, search, params))).data,
+      list: async (params, search) => (await stripe.checkout.sessions.list(buildParameter(table, search, false, params))).data,
       update: () => Promise.reject(`Impossible to update ${table} from Stripe API`),
       retrieve: element => stripe.checkout.sessions.retrieve(element.id)
     }
@@ -207,17 +213,17 @@ function helperGetter (stripe) {
       // We should do nothing during this step, as it should be done during a previous step
       delete: async () => {}, // TODO check if this is enough or if we should use the parameter's id, and cache data to be able to delete through originalHelper.delete
       list: async (params, search) => {
-        const elements = await getTableHelper(sourceTable).retrieve({ id: params[sourceTable.toLowerCase()] }, [field])
+        const elements = await getTableHelper(sourceTable).retrieve({ id: params[sourceTable] }, [field])
         // Results can be just a list or an ApiList.
         const array = asList[sourceTable].includes(field) ? /** @type {import('stripe').Stripe.ApiList} **/(elements[field]).data : elements[field]
-        const results = array.map(d => ({ id: params[sourceTable] + d.id, [sourceTable.toLowerCase()]: params[sourceTable.toLowerCase()], [field]: d.id }))
+        const results = array.map(d => ({ id: params[sourceTable] + d.id, [sourceTable]: { id: params[sourceTable] }, [field]: { id: d.id } }))
         return results
       },
       // This step should normally never be called
       update: () => Promise.reject(`This 'update' in table ${currentTable} should normally never happen`),
       retrieve: async (element, search) => {
         const list = await associationHelper(sourceTable, currentTable, field).list(element, search)
-        const result = list.find(d => d[sourceTable.toLowerCase()] === element[sourceTable.toLowerCase()] && d[field] === element[field])
+        const result = list.find(d => d[sourceTable].id === element[sourceTable] && d[field].id === element[field])
         return result
       }
     }
@@ -248,7 +254,7 @@ function helperGetter (stripe) {
       case 'InvoiceItem': return defaultHelper(table)
       case 'PromotionCode': return undelatableHelper(table)
       case 'Mandate': return { ...unretrievableHelper(table), retrieve: element => stripe.mandates.retrieve(element.id) }
-      case 'Review': return { ...unretrievableHelper(table), retrieve: element => stripe.reviews.retrieve(element.id), list: async (params, search) => (await stripe.reviews.list(buildParameter(table, search, params))).data }
+      case 'Review': return { ...unretrievableHelper(table), retrieve: element => stripe.reviews.retrieve(element.id), list: async (params, search) => (await stripe.reviews.list(buildParameter(table, search, false, params))).data }
       case 'BalanceTransaction': return customerHelper(table)
       // { ...unretrievableHelper('table'), retrieve: element => stripe.balanceTransactions.retrieve(element.id), list: params => stripe.balanceTransactions.list(params)}
       case 'Refund': return undelatableHelper(table)

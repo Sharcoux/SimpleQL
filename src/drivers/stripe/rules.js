@@ -85,7 +85,7 @@ const Review = {
   write: none
 }
 
-/** @type {import('../../accessControl').Rules} */
+/** @type {import('./').StripeTables<import('../../accessControl').TableRule>} */
 const rules = {
   Customer,
   SubscriptionItem,
@@ -117,7 +117,8 @@ const rules = {
   Refund: privateData,
   BalanceTransaction: privateData,
   Transfer: privateData,
-  TransferReversal: privateData
+  TransferReversal: privateData,
+  ExternalAccount: privateData
 }
 
 const { tables } = require('./tables')

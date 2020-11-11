@@ -38,7 +38,7 @@ function intersection (array1, array2) {
  * @returns {T[]} The fusion
 **/
 function merge (array1, array2) {
-  return array2.concat(array1.filter(elt => array2.includes(elt)))
+  return array2.concat(array1.filter(elt => !array2.includes(elt)))
 }
 
 /**

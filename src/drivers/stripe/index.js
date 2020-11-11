@@ -2,7 +2,7 @@
 const { getOptionalDep, merge, isPrimitive, filterObject } = require('../../utils')
 const Driver = require('../template')
 const { dependantTables, helperGetter } = require('./adapters')
-const { associationTables } = require('./tables')
+const { tablesModel } = require('./tables')
 
 /** @type {(secret: string) => import('stripe').Stripe} */
 const stripe = getOptionalDep('stripe', 'Stripe database type')
@@ -52,19 +52,13 @@ const BAD_WHERE = 'bad where condition'
  * property {T} Item Object relative to the Item table
  **/
 
-/** @type {StripeTable[]} */
-const tableNames = ['Customer', 'Plan', 'Subscription', 'SubscriptionItem', 'Product', 'Price', // 'LineItem', 'Item', 'SetupAttempt'
-  'PaymentMethod', 'Invoice', 'SetupIntent', 'Account', 'SubscriptionSchedule', 'Discount', 'Transfer',
-  'PaymentIntent', 'Source', 'TaxRate', 'TaxId', 'Charge', 'Coupon', 'ExternalAccount', 'TransferReversal',
-  'Session', 'InvoiceItem', 'PromotionCode', 'Mandate', 'Review', 'BalanceTransaction', 'Refund']
-
 /**
  * Initialize an object so that every property will return a list if not already initialized
  * @returns {StripeTables<Object[]>} object The object to transform
  */
 function createPendingLists () {
   const object = {}
-  tableNames.forEach(key => object[key] = [])
+  Object.keys(tablesModel).forEach(key => object[key] = [])
   return /** @type {StripeTables<Object>} **/(object)
 }
 
@@ -85,6 +79,8 @@ function simpleQLToStripe (object) {
       delete result[key]
     }
   })
+  // Flatten single child arrays
+  Object.keys(result).map(key => Array.isArray(result[key]) && result[key].length === 1 && (result[key] = result[key][0]))
   return result
 }
 
@@ -95,9 +91,6 @@ function simpleQLToStripe (object) {
  * @returns {import('../../utils').Element} The SimpleQL object
  */
 function stripeToSimpleQL (keys, object) {
-  console.log('-----------------')
-  console.log(keys)
-  console.log(object)
   const result = { ...object }
   if (object.id) {
     result.reservedId = object.id
@@ -107,12 +100,10 @@ function stripeToSimpleQL (keys, object) {
     if (key === 'reservedId') return
     if (key.endsWith('Id')) {
       const shortKey = key.substring(0, key.length - 2)
-      result[key] = object[shortKey]
+      result[key] = object[shortKey].id
       delete result[shortKey]
     }
   })
-  console.log(result)
-  console.log('--------------------')
   return result
 }
 /* TODO:
@@ -150,8 +141,6 @@ class StripeDriver extends Driver {
     this.toBeDeleted = createPendingLists()
     /** @type {StripeTables<{ id: string, values: Object }[]>} */
     this.toBeUpdated = createPendingLists()
-    /** @type {StripeTables<{ id: string, values: Object }[]>} */
-    this.toBe = createPendingLists()
 
     this.inTransaction = false
   }
@@ -226,24 +215,24 @@ class StripeDriver extends Driver {
    * @returns {Promise<import('../../utils').Element[]>} The results
    */
   async _getAll ({ table, where, keys = [] }) {
-    // console.log(table, where, keys)
-    if (associationTables.includes(table)) return Promise.resolve([]) // For now, we don't support associations
     // If a condition specify that no value is accepted for a column, no result will match the constraint
     if (Object.values(where).find(v => Array.isArray(v) && v.length === 0)) return Promise.resolve([])
     const allKeys = merge(keys, Object.keys(where))
     // We convert SimpleQL keys into Stripe keys
     const search = allKeys.map(key => (key !== 'reservedId' && key.endsWith('Id')) ? key.substring(0, key.length - 2) : key)
+    const whereStripe = simpleQLToStripe(where)
 
-    const elements = typeof where.reservedId === 'string'
-      ? [await this.getHelper(/** @type {StripeTable} **/(table)).retrieve(simpleQLToStripe(where), search)]
-      : await this.getHelper(/** @type {StripeTable} **/(table)).list(simpleQLToStripe(where), search)
+    const elements = typeof whereStripe.id === 'string'
+      ? [await this.getHelper(/** @type {StripeTable} **/(table)).retrieve(whereStripe, search)]
+      : await this.getHelper(/** @type {StripeTable} **/(table)).list(whereStripe, search)
+
     // Convert Stripe objects into simple ql objects
     return elements.map(object => stripeToSimpleQL(allKeys, object))
     // We remove from the results the elements that have been deleted
       .filter(elt => !this.toBeDeleted[table].find(e => e.reservedId === elt.reservedId))
     // We add the created elements to the results
       // .concat(this.toBeCreated[table])
-    // Take only the elements that match the request conditions
+      // Take only the elements that match the request conditions
       .filter(elt => matchWhereCondition(elt, where))
   }
 
@@ -253,12 +242,11 @@ class StripeDriver extends Driver {
    * @returns {Promise<import('../../utils').Element[]>} The results
    */
   async get ({ table, search, where, offset, limit, order }) {
-    const dependence = dependantTables[table]
-    if (dependence && !where[dependence + 'Id']) return Promise.reject(`You need to specify ${dependence} field in table ${table} to get data from Stripe API.`)
+    const dependency = dependantTables[table]
+    if (dependency && !where[dependency + 'Id']) return Promise.reject(`You need to specify ${dependency} field in table ${table} to get data from Stripe API.`)
     try {
       if (!search.length) return Promise.resolve([])
       const results = await this._getAll({ table, where, keys: search })
-      console.log(results)
       if (order) results.sort(sortFunction(order))
       // Drop the first elements if offset is provided
       if (offset) results.splice(0, offset)

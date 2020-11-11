@@ -112,7 +112,7 @@ function getTargetObject (object, field) {
  **/
 function is (field) {
   if (!field || !(Object(field) instanceof String)) throw new Error('`is` rule expects its parameter to be a string matching a field or a table. Please refer to the documentation.')
-  return () => async ({ authId, request, object, requestFlag }) => {
+  return ({ tableName }) => async ({ authId, request, object, requestFlag }) => {
     if (requestFlag) {
       const target = getObjectInRequest(request, field)
       return target && target.reservedId === authId ? Promise.resolve() : Promise.reject(`is(${field}) rule: ${authId} is not ${field} of ${JSON.stringify(request)}.`)

@@ -7,6 +7,7 @@ const URL = require('url').URL
 const https = require('https')
 const createRequestHandler = require('../requestHandler')
 const log = require('../utils/logger')
+const plugin = require('../drivers/stripe/plugin')
 
 /** @type {import('stripe').Stripe & { [object: string]: import('stripe').Stripe['customers'] }} */
 let stripe
@@ -125,7 +126,7 @@ async function createStripePlugin (app, config) {
   const { tables, tablesModel } = require('../drivers/stripe/tables')
   const rules = require('../drivers/stripe/rules')
   const driver = require('../drivers/stripe')({ password: secretKey })
-  const stripeRequestHandler = createRequestHandler({ tables, rules, tablesModel, plugins: [], driver, privateKey: secretKey })
+  const stripeRequestHandler = createRequestHandler({ tables, rules, tablesModel, plugins: [plugin], driver, privateKey: secretKey })
   let normalTableNames = []
   const stripeTableNames = Object.keys(tables)
   const { getQuery } = require('..')
@@ -148,9 +149,9 @@ async function createStripePlugin (app, config) {
       const authId = res.locals.authId
       let stripeId = ''
       // We need to convert the User id into Customer id
-      if (authId) {
+      if (authId && Object.keys(stripeRequest).length) {
         const query = await getQuery(database)
-        const results = await query({ [customerTable]: { get: ['stripeId'] } })
+        const results = await query({ [customerTable]: { reservedId: authId, get: ['stripeId'] } })
         const customer = results[customerTable][0]
         stripeId = customer && customer.stripeId
       }

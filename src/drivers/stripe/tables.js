@@ -721,7 +721,7 @@ const expandable = {
   Product: [],
   Price: ['product'],
   Plan: ['product'],
-  Subscription: ['customer', 'default_payment_method', 'latest_invoice', 'pending_setup_intent', 'default_source', 'schedule'],
+  Subscription: ['customer', /* 'default_payment_method', */ 'latest_invoice', 'pending_setup_intent', /* 'default_source', */ 'schedule'],
   SubscriptionItem: [],
   SubscriptionSchedule: ['customer', 'subscription'],
   Account: [],

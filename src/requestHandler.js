@@ -2,7 +2,7 @@
 
 /** This is the core of SimpleQL where every request is cut in pieces and transformed into a query to the database */
 const { isPrimitive, toType, classifyRequestData, operators, sequence, stringify, filterObject, classifyData } = require('./utils')
-const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, DATABASE_ERROR, WRONG_VALUE } = require('./errors')
+const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, WRONG_VALUE } = require('./errors')
 const log = require('./utils/logger')
 
 /**
@@ -168,12 +168,13 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
         /**
            * Read the data we have stored about the provided element
            * @param {string | number} reservedId The id of the element we are trying to get data about
-           * @param {string[]} properties The column we want to read from the cache
+           * @param {string[]=} properties The column we want to read from the cache
            * @returns {import('./utils').Element | undefined} The data we found about the object
            */
         function readCache (reservedId, properties) {
           const cached = reservedId && cache[tableName][reservedId]
           if (!cached) return
+          if (!properties) properties = Object.keys(cached)
           // If some data were invalidated, we give up reading the cache as it might be outdated
           if (properties.find(key => cached[key] === undefined)) return
           const result = { reservedId }
@@ -214,11 +215,11 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
           if (local.readOnly && (request.create || request.delete)) return []
           // Insert elements inside the database if request.create is set
           else if (request.create) return create()
-          // Retrieve data from the database
           else {
-            let results = await get()
             // retrieve the objects from other tables
-            results = await resolveObjects(results)
+            await resolveObjects()
+            // Retrieve data from the database
+            let results = await get()
             // Retrieve the objects associated through association tables
             results = await resolveChildrenArrays(results)
             // In read only mode, skip the next steps
@@ -508,12 +509,13 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
             objectsSet.forEach(key => { if (!searchKeys.includes(key + 'Id')) searchKeys.push(key + 'Id') })
           }
           let impossible = false
-          primitives.map(key => {
+          primitives.forEach(key => {
             // If we have an empty array as a constraint, it means that no value can satisfy the constraint
             if (Array.isArray(request[key]) && !request[key].length) impossible = true
             where[key] = request[key]// We don't consider empty arrays as valid constraints
             if (!searchKeys.includes(key)) searchKeys.push(key)
           })
+          objects.forEach(key => where[key + 'Id'] = request[key + 'Id'])
           if (impossible) return Promise.resolve([])
           // We try to read the data from the cache
           const cachedData = readCache(request.reservedId, search)
@@ -529,6 +531,11 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
           })
             // We add the date to the cache as they were received from the database
             .then(results => {
+              objects.forEach(key => results.forEach(result => {
+                result[key] = readCache(result[key + 'Id'])
+                delete request[key + 'Id']
+                delete result[key + 'Id']
+              }))
               results.forEach(addCache)
               return results
             })
@@ -541,36 +548,37 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
 
         /**
            * We will now read the data of the objects we previously mapped to the results
-           * @param {import('./utils').Element[]} results The current results
-           * @returns {Promise<import('./utils').Element[]>} The updated results
+           * @returns {Promise<void>} The updated results
            */
-        async function resolveObjects (results) {
+        async function resolveObjects () {
           log('resolution part title', 'resolveObjects')
-          return sequence(objects.map(key => () => sequence(results.map(result => () => {
+          return sequence(objects.map(key => () => {
             // If we are looking for null values, no need to query the foreign table.
             if (!request[key]) {
               request[key] = null
               return Promise.resolve()
             }
             const foreignTable = /** @type {import('./utils').TableValue} **/(table[key])
-            request[key].reservedId = result[key + 'Id']
-            return applyInTable(request[key], foreignTable.tableName).then(objects => {
-              if (objects.length === 0 && request[key].required) {
-                return Promise.reject({
+            return applyInTable(request[key], foreignTable.tableName).then(results => {
+              if (results.length === 0) {
+                if (request[key].required) { return Promise.reject({
                   name: NOT_FOUND,
                   message: `Nothing found with these constraints : ${tableName}->${key}->${JSON.stringify(request[key])}`
-                })
-              } else if (objects.length > 1) {
-                return Promise.reject({
-                  name: DATABASE_ERROR,
-                  message: `We found more than one object for key ${key} with the id ${result[key + 'Id']} in table ${foreignTable.tableName}`
-                })
+                }) }
+                request[key + 'Id'] = []
+              } else if (results.length > 1) {
+                // return Promise.reject({
+                //   name: DATABASE_ERROR,
+                //   message: `We found more than one object for key ${key} with the constraint ${request[key]} in table ${foreignTable.tableName}`
+                // })
+                request[key + 'Id'] = results.map(res => res.reservedId)
+                results.map(addCache)
               } else {
-                delete result[key + 'Id']
-                result[key] = objects[0]
+                request[key + 'Id'] = results[0].reservedId
+                addCache(results[0])
               }
             })
-          })))).then(() => results)
+          })).then(() => {})
         }
 
         /**
@@ -581,7 +589,7 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
         async function resolveChildrenArrays (results) {
           log('resolution part title', 'resolveChildrenArrays')
           // We keep only the arrays constraints that are truly constraints. Constraints that have keys other than 'add' or 'remove'.
-          const realArrays = arrays.filter(key => request[key] && Object.keys(request[key]).find(k => !['add', 'remove'].includes(k)))
+          const realArrays = arrays.filter(key => (request.get && request.get.includes(key)) || (request[key] && Object.keys(request[key]).find(k => !['add', 'remove'].includes(k))))
           return sequence(results.map(result =>
             () => sequence(realArrays.map(key =>
               // We look for all objects associated to the result in the association table
