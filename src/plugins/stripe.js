@@ -16,6 +16,12 @@ let stripe
 let validIPs = []
 let updatingInterval = null
 
+/** @type {Promise<import('../requestHandler').RequestHandler>} */
+const stripeQuery = Promise.resolve(async () => ({}))
+/** @type {Promise<import('../utils').Result>} */
+let stripeQueryStack = Promise.resolve({})
+const getStripeQuery = () => stripeQuery
+
 /**
  * Update Stripe Ip address to be sure the hooks are coming from there
  * @returns {Promise<String[] | null>}
@@ -158,7 +164,9 @@ async function createStripePlugin (app, config) {
       // We handle the normal part with the default behaviour
       req.body = normalRequest
       // We handle the stripe part with our stripe request handler
-      res.locals.results = await stripeRequestHandler(stripeRequest, { authId: stripeId, readOnly: false })
+      // We need to ensure that the previous request ends before the next one can go on
+      stripeQueryStack = stripeQueryStack.catch(() => {}).then(() => stripeRequestHandler(stripeRequest, { authId: stripeId, readOnly: false }))
+      res.locals.results = await stripeQueryStack
       next()
     },
     onRequest: {

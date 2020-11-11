@@ -435,6 +435,16 @@ createTestServer()
     })
   ]))
 
+  // Concurrent server-side request test
+  .then(() => {
+    return Promise.all([getQuery('simpleql').then(query => query({
+      Customer: { email: 'user1@email.com', get: ['subscriptions'] }
+    })),
+    getQuery('simpleql').then(query => query({
+      Customer: { email: 'user1@email.com', get: ['subscriptions'] }
+    }))])
+  })
+
   .then(() => console.log('Tests successful!'))
 
   .catch(err => {
