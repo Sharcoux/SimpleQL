@@ -249,7 +249,8 @@ class MysqlDriver extends Driver {
       if (length) query += `(${length})`
       if (unsigned) query += ' UNSIGNED'
       if (notNull) query += ' NOT NULL'
-      if (defaultValue) query += ` DEFAULT ${this._escapeValue(table, name, defaultValue === now ? 'NOW' : defaultValue)}`
+      if (defaultValue === now) query += ' DEFAULT NOW()'
+      else if (defaultValue) query += ` DEFAULT ${this._escapeValue(table, name, defaultValue)}`
       if (autoIncrement) query += ' AUTO_INCREMENT'
       return query
     })
