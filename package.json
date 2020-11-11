@@ -1,6 +1,6 @@
 {
   "name": "simple-ql",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "description": "A node framework to manage your backend and your database with the least possible amount of code.",
   "main": "src/index.js",
   "scripts": {
