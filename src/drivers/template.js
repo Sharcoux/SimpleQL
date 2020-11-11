@@ -82,7 +82,7 @@ class Driver {
   /**
    * Insert an entry into the current database
    * @param {CreateParam} createParam The object describing the request
-   * @returns {Promise<any>} The results
+   * @returns {Promise<(string | number)[]>} The results ids
    */
   async create({ table, elements }) {
     return Promise.resolve([])

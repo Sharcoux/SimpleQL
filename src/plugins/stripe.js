@@ -15,7 +15,10 @@ let stripe
 let validIPs = []
 let updatingInterval = null
 
-/** Update Stripe Ip address to be sure the hooks are coming from there */
+/**
+ * Update Stripe Ip address to be sure the hooks are coming from there
+ * @returns {Promise<String[] | null>}
+ **/
 async function updateStripeIpList () {
   return new Promise((resolve, reject) => {
     const url = 'https://stripe.com/files/ips/ips_webhooks.json'
@@ -41,7 +44,7 @@ async function updateStripeIpList () {
     }).on('error', (error) => {
       reject(`Error when retrieving Stripe IPs: ${error.message}`)
     })
-  })
+  }).catch(console.error)
 }
 
 /**
@@ -178,7 +181,6 @@ async function createStripePlugin (app, config) {
     },
     onDeletion: {
       [customerTable]: async (deleted, { request, local }) => {
-        console.log(deleted, request)
         if (!local.stripeDeleted) local.stripeDeleted = []
         const unreadable = deleted.find(user => !user.stripeId)
         if (unreadable) {

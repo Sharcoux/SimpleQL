@@ -1,7 +1,7 @@
 // @ts-check
 const { getOptionalDep, merge, isPrimitive, filterObject } = require('../../utils')
 const Driver = require('../template')
-const { taxIdHelper, externalAccountHelper, mandateHelper, reviewHelper } = require('./adapters')
+const { dependantTables, helperGetter } = require('./adapters')
 const { associationTables } = require('./tables')
 
 /** @type {(secret: string) => import('stripe').Stripe} */
@@ -10,11 +10,11 @@ const stripe = getOptionalDep('stripe', 'Stripe database type')
 const BAD_VALUE = 'bad value'
 const BAD_WHERE = 'bad where condition'
 
-// Removed: Discount, LineItem, Item, SetupAttempt
+// Removed: LineItem, Item, SetupAttempt
 /** @typedef { 'Customer' | 'Plan' | 'Subscription' | 'SubscriptionItem' | 'Product' | 'Price' |
-'PaymentMethod' | 'Invoice' | 'SetupIntent' | 'Account' | 'SubscriptionSchedule' |
-'PaymentIntent' | 'Source' | 'TaxRate' | 'TaxID' | 'Charge' | 'Coupon' |
-'Session' | 'InvoiceItem' | 'PromotionCode' | 'Mandate' | 'Review' | 'ExternalAccount' }  StripeTable */
+'PaymentMethod' | 'Invoice' | 'SetupIntent' | 'Account' | 'SubscriptionSchedule' | 'Refund' | 'Transfer' |
+'PaymentIntent' | 'Source' | 'TaxRate' | 'TaxId' | 'Charge' | 'Coupon' | 'Discount' | 'TransferReversal' |
+'Session' | 'InvoiceItem' | 'PromotionCode' | 'Mandate' | 'Review' | 'BalanceTransaction' | 'ExternalAccount' }  StripeTable */
 
 /**
  * @template T
@@ -25,7 +25,7 @@ const BAD_WHERE = 'bad where condition'
  * @property {T} SubscriptionItem Object relative to the SubscriptionItem table
  * @property {T} Product Object relative to the Product table
  * @property {T} Price Object relative to the Price table
- * property {T} Discount Object relative to the Discount table
+ * @property {T} Discount Object relative to the Discount table
  * @property {T} PaymentMethod Object relative to the PaymentMethod table
  * @property {T} Invoice Object relative to the Invoice table
  * @property {T} SetupIntent Object relative to the SetupIntent table
@@ -34,7 +34,7 @@ const BAD_WHERE = 'bad where condition'
  * @property {T} SubscriptionSchedule Object relative to the SubscriptionSchedule table
  * @property {T} Source Object relative to the Source table
  * @property {T} TaxRate Object relative to the TaxRate table
- * @property {T} TaxID Object relative to the TaxId table
+ * @property {T} TaxId Object relative to the TaxId table
  * @property {T} ExternalAccount Object relative to the ExternalAccount table
  * @property {T} Charge Object relative to the Charge table
  * @property {T} Coupon Object relative to the Coupon table
@@ -45,14 +45,18 @@ const BAD_WHERE = 'bad where condition'
  * @property {T} Mandate Object relative to the Mandate table
  * property {T} SetupAttempt Object relative to the SetupAttempt table
  * @property {T} Review Object relative to the Review table
+ * @property {T} Refund Object relative to the Refund table
+ * @property {T} BalanceTransaction Object relative to the BalanceTransaction table
+ * @property {T} Transfer Object relative to the Transfer table
+ * @property {T} TransferReversal Object relative to the TransferReversal table
  * property {T} Item Object relative to the Item table
  **/
 
 /** @type {StripeTable[]} */
-const tableNames = ['Customer', 'Plan', 'Subscription', 'SubscriptionItem', 'Product', 'Price', // 'Discount', 'Item', 'SetupAttempt'
-  'PaymentMethod', 'Invoice', 'SetupIntent', 'Account', 'SubscriptionSchedule',
-  'PaymentIntent', 'Source', 'TaxRate', 'TaxID', 'Charge', 'Coupon', 'ExternalAccount',
-  'Session', 'InvoiceItem', 'PromotionCode', 'Mandate', 'Review']
+const tableNames = ['Customer', 'Plan', 'Subscription', 'SubscriptionItem', 'Product', 'Price', // 'LineItem', 'Item', 'SetupAttempt'
+  'PaymentMethod', 'Invoice', 'SetupIntent', 'Account', 'SubscriptionSchedule', 'Discount', 'Transfer',
+  'PaymentIntent', 'Source', 'TaxRate', 'TaxId', 'Charge', 'Coupon', 'ExternalAccount', 'TransferReversal',
+  'Session', 'InvoiceItem', 'PromotionCode', 'Mandate', 'Review', 'BalanceTransaction', 'Refund']
 
 /**
  * Initialize an object so that every property will return a list if not already initialized
@@ -70,17 +74,18 @@ function createPendingLists () {
  * @returns {Object} The Stripe object
  */
 function simpleQLToStripe (object) {
+  const result = { ...object }
   if (object.reservedId) {
-    object.id = object.reservedId
-    delete object.reservedId
+    result.id = object.reservedId
+    delete result.reservedId
   }
   Object.keys(object).forEach(key => {
     if (key.endsWith('Id')) {
-      object[key.substring(0, key.length - 2)] = object[key]
-      delete object[key]
+      result[key.substring(0, key.length - 2)] = object[key]
+      delete result[key]
     }
   })
-  return object
+  return result
 }
 
 /**
@@ -90,19 +95,25 @@ function simpleQLToStripe (object) {
  * @returns {import('../../utils').Element} The SimpleQL object
  */
 function stripeToSimpleQL (keys, object) {
+  console.log('-----------------')
+  console.log(keys)
+  console.log(object)
+  const result = { ...object }
   if (object.id) {
-    object.reservedId = object.id
-    delete object.id
+    result.reservedId = object.id
+    // delete result.id
   }
   keys.forEach(key => {
     if (key === 'reservedId') return
     if (key.endsWith('Id')) {
       const shortKey = key.substring(0, key.length - 2)
-      object[key] = object[shortKey]
-      delete object[shortKey]
+      result[key] = object[shortKey]
+      delete result[shortKey]
     }
   })
-  return object
+  console.log(result)
+  console.log('--------------------')
+  return result
 }
 /* TODO:
 Transform productId -> product
@@ -119,6 +130,7 @@ class StripeDriver extends Driver {
   constructor (secretKey) {
     super()
     this.stripe = stripe(secretKey)
+    this.getHelper = helperGetter(this.stripe)
 
     this.startTransaction = this.startTransaction.bind(this)
     this.commit = this.commit.bind(this)
@@ -138,45 +150,10 @@ class StripeDriver extends Driver {
     this.toBeDeleted = createPendingLists()
     /** @type {StripeTables<{ id: string, values: Object }[]>} */
     this.toBeUpdated = createPendingLists()
+    /** @type {StripeTables<{ id: string, values: Object }[]>} */
+    this.toBe = createPendingLists()
 
     this.inTransaction = false
-  }
-
-  /**
-   * Returns the helper corresponding to the provided table.
-   * @param {string} table The table's name
-   */
-  _stripeHelper (table) {
-    switch (table) {
-      case 'Customer': return this.stripe.customers
-      case 'Plan': return this.stripe.plans
-      case 'Subscription': return this.stripe.subscriptions
-      case 'SubscriptionItem': return this.stripe.subscriptionItems
-      case 'Product': return this.stripe.products
-      case 'Price': return this.stripe.prices
-      // case 'Discount': return this.stripe.
-      case 'PaymentMethod': return this.stripe.paymentMethods
-      case 'Invoice': return this.stripe.invoices
-      case 'SetupIntent': return this.stripe.setupIntents
-      case 'Account': return this.stripe.accounts
-      case 'SubscriptionSchedule': return this.stripe.subscriptionSchedules
-      case 'PaymentIntent': return this.stripe.paymentIntents
-      case 'Source': return this.stripe.sources
-      case 'TaxRate': return this.stripe.taxRates
-      case 'TaxID': return taxIdHelper
-      case 'ExternalAccount': return externalAccountHelper
-      case 'Charge': return this.stripe.charges
-      case 'Coupon': return this.stripe.coupons
-      case 'Session': return this.stripe.checkout.sessions
-      case 'InvoiceItem': return this.stripe.invoiceItems
-      case 'PromotionCode': return this.stripe.promotionCodes
-      // case 'LineItem': return this.stripe.invoices.
-      case 'Mandate': return mandateHelper
-      // case 'SetupAttemp': return this.stripe.setupAttempts
-      case 'Review': return reviewHelper
-      // case 'Item': return this.stripe.
-      default: throw new Error(`Table ${table} is not yet supported by Stripe database driver.`)
-    }
   }
 
   /** Clear the connection to the database */
@@ -195,19 +172,9 @@ class StripeDriver extends Driver {
   async commit () {
     if (!this.inTransaction) return Promise.reject('You must start a transaction with `startTransaction()` before being able to commit it.')
     // Commit the changes
-    // Create all pending objects
-    Promise.all(Object.keys(this.toBeCreated).map(async key => {
-      const helper = this._stripeHelper(key)
-      await Promise.all(this.toBeCreated[key].map(data => {
-        const simpleQLData = simpleQLToStripe(data)
-        // TODO: handle objects that can't be created this way
-        // @ts-ignore
-        return helper.create(simpleQLData)
-      }))
-    }))
     // Update all pending objects
     Promise.all(Object.keys(this.toBeUpdated).map(async key => {
-      const helper = this._stripeHelper(key)
+      const helper = this.getHelper(/** @type {StripeTable} **/(key))
       await Promise.all(this.toBeUpdated[key].map(({ id, values }) => {
         const simpleQLData = simpleQLToStripe(values)
         // TODO: handle objects that can't be updated this way
@@ -217,11 +184,11 @@ class StripeDriver extends Driver {
     }))
     // delete all pending objects
     Promise.all(Object.keys(this.toBeDeleted).map(async key => {
-      const helper = this._stripeHelper(key)
+      const helper = this.getHelper(/** @type {StripeTable} **/(key))
       await Promise.all(this.toBeDeleted[key].map(elt => {
         // TODO: handle objects that can't be deleted this way
         // @ts-ignore
-        return helper.del(elt.reservedId)
+        return helper.delete(elt.reservedId)
       }))
     }))
     // Reset the pending lists
@@ -236,12 +203,13 @@ class StripeDriver extends Driver {
   async rollback () {
     if (!this.inTransaction) return Promise.reject('You must start a transaction with `startTransaction()` before being able to roll it back.')
     // Roll back the changes in reversed order
+    // delete all created objects
     Promise.all(Object.keys(this.toBeCreated).map(async key => {
-      const helper = this._stripeHelper(key)
-      await Promise.all(this.toBeDeleted[key].map(elt => {
+      const helper = this.getHelper(/** @type {StripeTable} **/(key))
+      await Promise.all(this.toBeCreated[key].map(elt => {
         // TODO: handle objects that can't be deleted this way
         // @ts-ignore
-        return helper.del(elt.reservedId)
+        return helper.delete(elt.reservedId)
       }))
     }))
     // Reset the pending lists
@@ -257,24 +225,24 @@ class StripeDriver extends Driver {
    * @param {import('../template').DeleteParam & { keys: string[] }} getAllParam The object describing the request
    * @returns {Promise<import('../../utils').Element[]>} The results
    */
-  async _getAll ({ table, where, keys }) {
-    // TODO Support Associations tables equivalence
+  async _getAll ({ table, where, keys = [] }) {
+    // console.log(table, where, keys)
     if (associationTables.includes(table)) return Promise.resolve([]) // For now, we don't support associations
     // If a condition specify that no value is accepted for a column, no result will match the constraint
     if (Object.values(where).find(v => Array.isArray(v) && v.length === 0)) return Promise.resolve([])
-    /** @type {import('stripe').Stripe.ApiList} */
-    // TODO: Handle elements for which we cannot list the data or use retrieve, and the elements that need an extra id such as externalAccounts or taxIds
+    const allKeys = merge(keys, Object.keys(where))
+    // We convert SimpleQL keys into Stripe keys
+    const search = allKeys.map(key => (key !== 'reservedId' && key.endsWith('Id')) ? key.substring(0, key.length - 2) : key)
+
     const elements = typeof where.reservedId === 'string'
-      // @ts-ignore
-      ? { data: [await this._stripeHelper(table).retrieve(where.reservedId)] }
-      // @ts-ignore
-      : await this._stripeHelper(table).list()
+      ? [await this.getHelper(/** @type {StripeTable} **/(table)).retrieve(simpleQLToStripe(where), search)]
+      : await this.getHelper(/** @type {StripeTable} **/(table)).list(simpleQLToStripe(where), search)
     // Convert Stripe objects into simple ql objects
-    return elements.data.map(object => stripeToSimpleQL(keys, object))
+    return elements.map(object => stripeToSimpleQL(allKeys, object))
     // We remove from the results the elements that have been deleted
       .filter(elt => !this.toBeDeleted[table].find(e => e.reservedId === elt.reservedId))
     // We add the created elements to the results
-      .concat(this.toBeCreated[table])
+      // .concat(this.toBeCreated[table])
     // Take only the elements that match the request conditions
       .filter(elt => matchWhereCondition(elt, where))
   }
@@ -285,9 +253,12 @@ class StripeDriver extends Driver {
    * @returns {Promise<import('../../utils').Element[]>} The results
    */
   async get ({ table, search, where, offset, limit, order }) {
+    const dependence = dependantTables[table]
+    if (dependence && !where[dependence + 'Id']) return Promise.reject(`You need to specify ${dependence} field in table ${table} to get data from Stripe API.`)
     try {
       if (!search.length) return Promise.resolve([])
       const results = await this._getAll({ table, where, keys: search })
+      console.log(results)
       if (order) results.sort(sortFunction(order))
       // Drop the first elements if offset is provided
       if (offset) results.splice(0, offset)
@@ -306,8 +277,10 @@ class StripeDriver extends Driver {
    * @returns {Promise<any[]>} The results
    */
   async delete ({ table, where }) {
+    const dependence = dependantTables[table]
+    if (dependence && !where[dependence + 'Id']) return Promise.reject(`You need to specify ${dependence} field in table ${table} to delete data from Stripe API.`)
     try {
-      const elements = await this._getAll({ table, where, keys: Object.keys(where) })
+      const elements = await this._getAll({ table, where, keys: [] })
       this.toBeDeleted[table].push(...elements)
       return elements
     } catch (err) {
@@ -319,20 +292,22 @@ class StripeDriver extends Driver {
   /**
    * Insert an entry into the current database
    * @param {import('../template').CreateParam} createParam The object describing the request
-   * @returns {Promise<any>} The results
+   * @returns {Promise<(string | number)[]>} The results ids
    */
   async create ({ table, elements }) {
     const array = Array.isArray(elements) ? elements : [elements]
+    const dependence = dependantTables[table]
+    if (dependence && array.find(a => !a[dependence + 'Id'])) return Promise.reject(`You need to specify ${dependence} field in table ${table} to create data with Stripe API.`)
     this.toBeCreated[table].push(...array)
-    Promise.all(Object.keys(this.toBeCreated).map(async key => {
-      const helper = this._stripeHelper(key)
-      await Promise.all(this.toBeCreated[key].map(data => {
-        const simpleQLData = simpleQLToStripe(data)
-        // TODO: handle objects that can't be created this way
-        // @ts-ignore
-        return helper.create(simpleQLData)
-      }))
+    // Create all pending objects
+    const helper = this.getHelper(/** @type {StripeTable} **/(table))
+    const results = await Promise.all(this.toBeCreated[table].map(data => {
+      const simpleQLData = simpleQLToStripe(data)
+      // TODO: handle objects that can't be created this way
+      // @ts-ignore
+      return helper.create(simpleQLData)
     }))
+    return results.map(o => o.id)
   }
 
   /**
@@ -341,8 +316,11 @@ class StripeDriver extends Driver {
    * @returns {Promise<void>} The results
    */
   async update ({ table, values, where }) {
+    const dependence = dependantTables[table]
+    if (dependence && !where[dependence + 'Id']) return Promise.reject(`You need to specify ${dependence} field in table ${table} to update data from Stripe API.`)
+    if (values[dependence]) return Promise.reject(`The value for ${dependence} in table ${table} cannot be update with Stripe API`)
     try {
-      const elements = await this._getAll({ table, where, keys: merge(Object.keys(where), Object.keys(values)) })
+      const elements = await this._getAll({ table, where, keys: Object.keys(values) })
       this.toBeUpdated[table].push(...elements.map(elt => ({ id: elt.reservedId, values })))
     } catch (err) {
       Object.assign(err, { table })
@@ -416,12 +394,10 @@ function sortFunction (priorities) {
 function matchWhereCondition (result, where) {
   if (!where) return true
   if (!(where instanceof Object)) throw new Error(BAD_WHERE)
-  // We replace fooId with foo, except for reservedId
-
   return !!Object.keys(where).every(key => {
     const value = result[key]
     try {
-      matchCondition(value, where[key])
+      return matchCondition(value, where[key])
     } catch (err) {
       Object.assign(err, { key, value, where })
       throw err

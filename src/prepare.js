@@ -95,7 +95,7 @@ function prepareTables (tables) {
       }
     })
 
-    // Create an association table. contacts = [User] creates a map contactsUser = {userId : 'integer/10', contactsId : 'integer/10'}
+    // Create an association table. User: { comments: [Comment] } creates a map commentsUser = {userId : 'integer/10', contactsId : 'integer/10'}
     arrays.forEach(key => {
       const name = key + tableName
       const associatedTable = /** @type {import('./utils').TableValue} */(table[key][0])

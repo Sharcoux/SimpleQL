@@ -6,9 +6,9 @@
 const categories = {
   // 'database query' : 'bold',
   // 'database result' : 'default',
-  // 'resolution part' : 'default',
-  // 'resolution part title' : 'magenta',
-  // 'access warning' : 'yellow',
+  'resolution part': 'default',
+  'resolution part title': 'magenta',
+  'access warning': 'yellow',
   info: 'cyan',
   warning: 'yellow',
   error: 'red'

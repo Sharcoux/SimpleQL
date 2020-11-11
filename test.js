@@ -422,20 +422,17 @@ createTestServer()
       Customer: { get: '*' }
     }),
     createTest(true, 'Retrieve Products from Stripe', {
-      Product: { get: '*' }
+      Product: { active: true, get: '*' }
     }),
     createTest(true, 'Retrieve Prices from Stripe', {
-      Price: { get: '*' }
-    }),
-    createTest(true, 'Retrieve Plans from Stripe', {
-      Plan: { get: '*' }
-    }),
-    createTest(true, 'Retrieve Subscriptions from Stripe', {
-      Subscription: { get: '*' }
-    }),
-    createTest(true, 'Retrieve SubscriptionItems from Stripe', {
-      SubscriptionItem: { get: '*' }
+      Price: { product: { name: 'Cantoo Scribe Trimestriel' }, get: '*' }
     })
+    // createTest(true, 'Retrieve Subscriptions from Stripe', {
+    //   Customer: { email: 'user1@email.com', get: ['subscriptions'] }
+    // }),
+    // createTest(true, 'Retrieve SubscriptionItems from Stripe', {
+    //   SubscriptionItem: { subscription: { customer: { email: 'user1@email.com' } }, get: '*' }
+    // })
   ]))
 
   .then(() => console.log('Tests successful!'))

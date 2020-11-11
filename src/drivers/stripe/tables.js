@@ -5,10 +5,10 @@ const { modelFactory } = require('../../utils')
 /** @type {import('../../utils').TablesDeclaration} */
 const tablesDeclaration = {}
 const {
-  Customer, Plan, Subscription, SubscriptionItem, Product, Price, ExternalAccount, // Discount, LineItem, Item, SetupAttempt
+  Customer, Plan, Subscription, SubscriptionItem, Product, Price, ExternalAccount, // LineItem, Item, SetupAttempt
   PaymentMethod, Invoice, SetupIntent, Account, SubscriptionSchedule, PaymentIntent,
-  Source, TaxRate, TaxID, Charge, Coupon, Session, InvoiceItem,
-  PromotionCode, Mandate, Review, Refund,
+  Source, TaxRate, TaxId, Charge, Coupon, Session, InvoiceItem,
+  PromotionCode, Mandate, Review, Refund, Discount,
   BalanceTransaction, Transfer, TransferReversal
 } = modelFactory(tablesDeclaration)
 
@@ -27,7 +27,7 @@ Object.assign(Customer, {
   currency: 'string',
   default_source: Source,
   delinquent: 'boolean',
-  discount: 'json', // Could be mapped to Discount, but that cannot be retrieved by the API.
+  discount: Discount,
   invoice_prefix: 'string',
   invoice_settings: 'json',
   livemode: 'boolean',
@@ -36,7 +36,7 @@ Object.assign(Customer, {
   tax_exempt: 'string',
   sources: [Source],
   subscriptions: [Subscription],
-  tax_ids: [TaxID]
+  tax_ids: [TaxId]
 })
 
 Object.assign(Product, {
@@ -128,7 +128,7 @@ Object.assign(Subscription, {
   days_until_due: 'integer',
   default_source: Source,
   default_tax_rates: [TaxRate],
-  discount: 'json', // Could be mapped to Discount, but that cannot be retrieved by the API.
+  discount: Discount,
   ended_at: 'dateTime',
   livemode: 'boolean',
   next_pending_invoice_item_invoice: 'dateTime',
@@ -215,7 +215,7 @@ Object.assign(Invoice, {
   object: 'string',
   account_country: 'string',
   account_name: 'string',
-  account_tax_ids: [TaxID],
+  account_tax_ids: [TaxId],
   amount_due: 'integer',
   amount_paid: 'integer',
   amount_remaining: 'integer',
@@ -231,12 +231,12 @@ Object.assign(Invoice, {
   customer_phone: 'string',
   customer_shipping: 'json',
   customer_tax_exempt: 'string',
-  customer_tax_ids: [TaxID],
+  customer_tax_ids: [TaxId],
   default_payment_method: PaymentMethod,
   default_source: Source,
   default_tax_rates: [TaxRate],
-  discount: 'json', // Could be mapped to Discount, but that cannot be retrieved by the API.
-  discounts: 'json', // Could be mapped to [Discount], but that cannot be retrieved by the API.
+  discount: Discount,
+  discounts: [Discount],
   due_date: 'dateTime',
   ending_balance: 'integer',
   footer: 'string',
@@ -275,7 +275,7 @@ Object.assign(TaxRate, {
   livemode: 'boolean'
 })
 
-Object.assign(TaxID, {
+Object.assign(TaxId, {
   id: 'string',
   country: 'string',
   customer: Customer,
@@ -287,19 +287,19 @@ Object.assign(TaxID, {
   verification: 'json'
 })
 
-// Object.assign(Discount, {
-//   id: 'string',
-//   coupon: Coupon,
-//   customer: Customer,
-//   end: 'dateTime',
-//   start: 'dateTime',
-//   subscription: Subscription,
-//   object: 'string',
-//   checkout_session: Session,
-//   invoice: Invoice,
-//   invoice_item: InvoiceItem,
-//   promotion_code: PromotionCode
-// })
+Object.assign(Discount, {
+  id: 'string',
+  coupon: Coupon,
+  customer: Customer,
+  end: 'dateTime',
+  start: 'dateTime',
+  subscription: Subscription,
+  object: 'string',
+  checkout_session: Session,
+  invoice: Invoice,
+  invoice_item: InvoiceItem,
+  promotion_code: PromotionCode
+})
 
 Object.assign(PaymentMethod, {
   id: 'string',
@@ -501,7 +501,7 @@ Object.assign(InvoiceItem, {
   object: 'string',
   date: 'dateTime',
   discountable: 'boolean',
-  discounts: 'json', // Could be mapped to Discount, but that cannot be retrieved by the API.
+  discounts: [Discount],
   invoice: Invoice,
   livemode: 'boolean',
   quantity: 'integer',
@@ -715,12 +715,78 @@ Object.assign(TransferReversal, {
   source_refund: Refund
 })
 
-const { tablesModel, tables } = prepareTables(tablesDeclaration)
-// We keep track of the association tables to handle them differently on stripe
-const associationTables = Object.keys(tablesModel).filter(key => !Object.keys(tables).includes(key))
+/** @type {import('./index').StripeTables<string[]>} */
+const expandable = {
+  Customer: ['subscriptions', 'default_source', 'sources', 'tax_ids'],
+  Product: [],
+  Price: ['product'],
+  Plan: ['product'],
+  Subscription: ['customer', 'default_payment_method', 'latest_invoice', 'pending_setup_intent', 'default_source', 'schedule'],
+  SubscriptionItem: [],
+  SubscriptionSchedule: ['customer', 'subscription'],
+  Account: [],
+  Invoice: ['charge', 'customer', 'payment_intent', 'subscription', 'account_tax_ids', 'default_payment_method', 'default_source', 'discounts'],
+  TaxRate: [],
+  TaxId: ['customer'],
+  Discount: ['customer', 'promotion_code'],
+  PaymentMethod: ['customer'],
+  SetupIntent: ['customer', 'payment_method', 'application', 'latest_attempt', 'mandate', 'on_behalf_of', 'single_use_mandate'],
+  PaymentIntent: ['customer', 'payment_method', 'application', 'invoice', 'on_behalf_of', 'review'],
+  Source: [],
+  ExternalAccount: ['account', 'customer'],
+  Coupon: ['applies_to'],
+  Session: ['customer', 'line_items', 'payment_intent', 'setup_intent', 'subscription'],
+  InvoiceItem: ['customer', 'discounts', 'invoice', 'subscription'],
+  PromotionCode: ['customer'],
+  Mandate: ['payment_method'],
+  Review: ['charge', 'payment_intent'],
+  BalanceTransaction: ['source'],
+  Charge: ['balance_transaction', 'customer', 'invoice', 'payment_intent', 'application', 'application_fee', 'on_behalf_of', 'order', 'review', 'source_transfer', 'transfer'],
+  Refund: ['charge', 'payment_intent', 'balance_transaction', 'failure_balance_transaction', 'source_transfer_reversal', 'transfer_reversal'],
+  Transfer: ['destination', 'balance_transaction', 'destination_payment', 'source_transaction'],
+  TransferReversal: ['transfer', 'balance_transaction', 'destination_payment_refund', 'source_refund']
+}
 
+/** @type {import('./index').StripeTables<string[]>} List the fields that will return an ApiList instead of just a list. */
+const asList = {
+  Customer: ['subscriptions', 'tax_ids', 'sources'],
+  Product: [],
+  Plan: [],
+  Price: [],
+  Subscription: ['items'],
+  SubscriptionItem: [],
+  SubscriptionSchedule: [],
+  Account: ['external_accounts'],
+  Invoice: ['lines'],
+  TaxRate: [],
+  TaxId: [],
+  Discount: [],
+  PaymentMethod: [],
+  SetupIntent: [],
+  PaymentIntent: ['charges'],
+  Source: [],
+  ExternalAccount: [],
+  Coupon: [],
+  Session: ['line_items'],
+  InvoiceItem: [],
+  PromotionCode: [],
+  Mandate: [],
+  Review: [],
+  BalanceTransaction: [],
+  Charge: ['refunds'],
+  Refund: [],
+  Transfer: ['reversals'],
+  TransferReversal: []
+}
+
+const { tablesModel, tables } = prepareTables(tablesDeclaration)
+// We keep track of the association tables to handle them differently on stripe.
+// The association tables are the tables in the model that were created from the table declaration.
+const associationTables = Object.keys(tablesModel).filter(key => !Object.keys(tables).includes(key))
 module.exports = {
   tablesModel,
   tables,
-  associationTables
+  associationTables,
+  expandable,
+  asList
 }
