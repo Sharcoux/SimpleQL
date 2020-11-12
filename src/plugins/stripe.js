@@ -16,11 +16,8 @@ let stripe
 let validIPs = []
 let updatingInterval = null
 
-/** @type {Promise<import('../requestHandler').RequestHandler>} */
-const stripeQuery = Promise.resolve(async () => ({}))
 /** @type {Promise<import('../utils').Result>} */
 let stripeQueryStack = Promise.resolve({})
-const getStripeQuery = () => stripeQuery
 
 /**
  * Update Stripe Ip address to be sure the hooks are coming from there
