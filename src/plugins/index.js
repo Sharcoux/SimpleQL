@@ -50,8 +50,8 @@ const stripePlugin = require('./stripe')
 /** @typedef {Object.<string, (results: { [table: string]: import('../utils').Element[] }, onEvent: OnEventParam) => Promise<void>>} onResponse **/
 /** @typedef {(results: import('../utils').Result, onEvent: OnEventParam) => Promise<void>} onSuccess **/
 /** @typedef {(error: import('../errors').Error, onEvent: OnEventParam) => Promise<void>} onError **/
-/** @typedef {Object.<string, (results: UpdateResults, onEvent: OnEventParam) => Promise<import('../utils').Element[]>>} onUpdate **/
-/** @typedef {Object.<string, (results: ListUpdateResults, onEvent: OnEventParam) => Promise<import('../utils').Element[]>>} onListUpdate **/
+/** @typedef {Object.<string, (results: UpdateResults, onEvent: OnEventParam) => Promise<void>>} onUpdate **/
+/** @typedef {Object.<string, (results: ListUpdateResults, onEvent: OnEventParam) => Promise<void>>} onListUpdate **/
 
 /**
  * @typedef {Object} Plugin
