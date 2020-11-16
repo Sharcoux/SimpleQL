@@ -54,3 +54,21 @@ To react to Stripe [events](https://stripe.com/docs/api/events) through webhooks
 ```
 
 Check the full [list](https://stripe.com/docs/api/events/types) of Stripe events.
+
+## Query the Stripe database within tables from another database
+
+To make cross database queries, you always need to use the `getQuery` function.
+
+Here is how you would make a request to the Stripe database from your main database treatment:
+
+```javascript
+const { getQuery } = require('simpleql')
+
+const plugin = {
+  onResult: {
+    User: (results) => {
+      getQuery('stripe').then(query => query({ Customer: { email: results.map(result => result.email)}, get: '*'}))
+    }
+  }
+}
+```

@@ -437,7 +437,7 @@ createTestServer()
 
   // Concurrent server-side request test
   .then(() => {
-    console.log('We test to make to concurrent requests')
+    console.log('We test to make two concurrent requests')
     return Promise.all([getQuery('simpleql').then(query => query({
       Customer: { email: 'user1@email.com', get: ['subscriptions'] }
     })),

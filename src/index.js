@@ -11,6 +11,7 @@ const plugins = require('./plugins')
 const { stringify, modelFactory, now, uuid } = require('./utils')
 const rateLimit = require('express-rate-limit')
 const createRequestHandler = require('./requestHandler')
+const { dbQuery, getQuery } = require('./utils/query')
 
 /** @typedef {import('./plugins').Plugin} Plugin */
 /** @typedef {Plugin[]} Plugins */
@@ -29,16 +30,10 @@ const createRequestHandler = require('./requestHandler')
  **/
 
 /**
- * This will store, for each database created, a promise that will resolve once the database is ready to be queried
- * @type {Object.<string, Promise<Query>>}
- **/
-const dbQuery = {}
-/**
  * This will queue promises to ensure that every request waits for the previous query to resolve before starting a new one
  * @type {Object.<string, Promise<import('./utils').Result>>}
  */
 const dbQueryStack = {}
-const getQuery = db => dbQuery[db] || Promise.reject(`No database were created with name ${db}.`)
 
 module.exports = {
   ...accessControl,

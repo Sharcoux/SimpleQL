@@ -8,6 +8,11 @@ const https = require('https')
 const createRequestHandler = require('../requestHandler')
 const log = require('../utils/logger')
 const plugin = require('../drivers/stripe/plugin')
+const { getQuery, dbQuery } = require('../utils/query')
+/** @type {Promise<import('../utils').Result>} */
+let stripeQueryStack = Promise.resolve({})
+/** @type {Promise<import('..').Query>} */
+dbQuery.stripe = stripeQueryStack.then(() => {})
 
 /** @type {import('stripe').Stripe & { [object: string]: import('stripe').Stripe['customers'] }} */
 let stripe
@@ -15,9 +20,6 @@ let stripe
 // Update the list of trustable ip everyday
 let validIPs = []
 let updatingInterval = null
-
-/** @type {Promise<import('../utils').Result>} */
-let stripeQueryStack = Promise.resolve({})
 
 /**
  * Update Stripe Ip address to be sure the hooks are coming from there
@@ -130,9 +132,9 @@ async function createStripePlugin (app, config) {
   const rules = require('../drivers/stripe/rules')
   const driver = require('../drivers/stripe')({ password: secretKey })
   const stripeRequestHandler = createRequestHandler({ tables, rules, tablesModel, plugins: [plugin], driver, privateKey: secretKey })
+  dbQuery.stripe = Promise.resolve((req, params = { authId: secretKey, readOnly: false }) => (stripeQueryStack = stripeQueryStack.catch(() => {}).then(() => stripeRequestHandler(req, params))))
   let normalTableNames = []
   const stripeTableNames = Object.keys(tables)
-  const { getQuery } = require('..')
   return {
     preRequisite: (tables) => {
       normalTableNames = Object.keys(tables)
@@ -162,8 +164,7 @@ async function createStripePlugin (app, config) {
       req.body = normalRequest
       // We handle the stripe part with our stripe request handler
       // We need to ensure that the previous request ends before the next one can go on
-      stripeQueryStack = stripeQueryStack.catch(() => {}).then(() => stripeRequestHandler(stripeRequest, { authId: stripeId, readOnly: false }))
-      res.locals.results = await stripeQueryStack
+      res.locals.results = await dbQuery.stripe.then(query => query(stripeRequest, { authId: stripeId, readOnly: false }))
       next()
     },
     onRequest: {
