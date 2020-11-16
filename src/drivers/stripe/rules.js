@@ -49,9 +49,6 @@ const Customer = {
   delete: none,
   read: is('self'),
   write: none,
-  metadata: {
-    write: is('self')
-  },
   address: {
     write: is('self')
   },
