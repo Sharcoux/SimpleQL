@@ -68,8 +68,7 @@ function prepareTables (tables) {
       const objectTable = /** @type {import('./utils').TableValue} **/(table[key])
       acc[tableName][key + 'Id'] = {
         type: 'char',
-        length: 36,
-        notNull: true
+        length: 36
       }
       // We need to change the index accordingly
       if (acc[tableName].index) {
