@@ -360,12 +360,13 @@ class MysqlDriver extends Driver {
         if (Array.isArray(value)) return '(' + value.map(v => writeCondition(v, operator)).join(' OR ') + ')'
         else if (value instanceof Object) {
           return '(' + Object.keys(value).map((/** @type {import('./template').Operator} **/k) => {
-            if (!operators.includes(k)) throw new Error(`${k} is not a valid constraint for key ${key}`)
-            if (!['not', '!', '='].includes(operator)) throw new Error(`${k} connot be combined with operator ${operator} in key ${key}`)
+            if (!operators.includes(k)) throw new Error(`${k} is not a valid constraint for key ${key} in table ${table}`)
+            if (!['not', '!', '='].includes(operator)) throw new Error(`${k} connot be combined with operator ${operator} in key ${key} in table ${table}`)
             return writeCondition(value[k], k)
           }).join(' AND ') + ')'
         }
-        throw new Error(`Should not be possible. We received this weird value : ${JSON.stringify(value)} which was nor object, nor array, nor primitive.`)
+        else if (value === undefined) throw new Error(`The value for ${key} was undefined in table ${table}.`)
+        throw new Error(`Should not be possible. We received this weird value : ${JSON.stringify(value)} which was nor object, nor array, nor primitive for column ${key} in table ${table}`)
       }
       return writeCondition(conditions[key], operator)
     }).join(' AND ')

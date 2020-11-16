@@ -518,7 +518,7 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
           objects.forEach(key => where[key + 'Id'] = request[key + 'Id'])
           if (impossible) return Promise.resolve([])
           // We try to read the data from the cache
-          const cachedData = readCache(request.reservedId, search)
+          const cachedData = readCache(request.reservedId, searchKeys)
           if (cachedData) return Promise.resolve([cachedData])
           return driver.get({
             table: tableName,
