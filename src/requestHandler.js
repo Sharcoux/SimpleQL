@@ -891,7 +891,8 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
             )
             // We return only the results where access was not fully denied
           }))
-            .then(() => results.filter(result => Object.values(result).find(value => value !== 'Access denied')))
+            // WARNING: Using Object.values here would not work because value can be null
+            .then(() => results.filter(result => Object.keys(result).find(key => result[key] !== 'Access denied')))
         }
       }
     }
