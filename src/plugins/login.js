@@ -78,7 +78,7 @@ function isString (key, value, table) {
 
 /**
  * Generate the jwt token
- * @param {number | string} id The data to integrate to the token
+ * @param {string} id The data to integrate to the token
  * @param {import('jsonwebtoken').SignOptions} jwtConfig jwt options
  * @returns {Promise<string>}
  */
@@ -180,7 +180,7 @@ function createLoginPlugin (config) {
         // A request is being authenticated with a JWT token
         checkJWT(token, jwtVerifyConfig)
           // TODO handle the possibility to use UUID instead of number for the reservedId
-          .then(decoded => (res.locals.authId = Number.parseInt(decoded.id, 10)))
+          .then(decoded => (res.locals.authId = decoded.id))
           .then(() => logger('login', `${userTable} ${res.locals.authId} is making a request.`))
           .then(() => next())
           .catch(error => {

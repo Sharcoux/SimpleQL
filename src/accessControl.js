@@ -12,7 +12,7 @@ const { DATABASE_ERROR } = require('./errors')
 
 /**
  * @typedef {Object} RuleParams
- * @property {string | number} authId The id used to identify the user making the request.
+ * @property {string} authId The id used to identify the user making the request.
  * @property {import('./utils').Request} request The portion of the request relative to the current table.
  * @property {object} object The result of this portion of the request
  * @property {import('./utils').QueryFunction} query A function that can make a SimpleQL query to the database (see [query](../docs/requests.md)).
@@ -176,7 +176,7 @@ function count (field, { amount, min, max } = {}) {
  * @property {string} field The column to check
  * @property {import('./utils').TablesDeclaration} tables The tables as they were declared
  * @property {string} tableName The current table name
- * @property {string | number} authId The id identifying the emitter of the request. Used to calculate the access rights
+ * @property {string} authId The id identifying the emitter of the request. Used to calculate the access rights
  * @property {import('./utils').Result} object
  * @property {import('./utils').Request} request
  * @property {boolean=} requestFlag

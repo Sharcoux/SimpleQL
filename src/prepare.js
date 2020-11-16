@@ -1,7 +1,7 @@
 // @ts-check
 
 /** We need to make some treatment to the data provided by the user before being able to create the server */
-const { classifyData } = require('./utils')
+const { classifyData, uuid } = require('./utils')
 const { none } = require('./accessControl')
 
 /** transform tables into sql data types and add a tableName property to each table. Returns the tableModel generated
@@ -18,7 +18,7 @@ function prepareTables (tables) {
   // We add the reservedId props
   // TODO make possible to use UUID instead of auto-increment integer
   /** @type {import('./utils').Column} */
-  const reservedId = { type: 'integer', length: 10, unsigned: true, autoIncrement: true }
+  const reservedId = { type: 'char', length: 36, defaultValue: uuid, notNull: true }
   Object.keys(tables).forEach(tableName => tables[tableName].reservedId = reservedId)
 
   // We transform the tables into a valid data model
@@ -67,9 +67,9 @@ function prepareTables (tables) {
     objects.forEach(key => {
       const objectTable = /** @type {import('./utils').TableValue} **/(table[key])
       acc[tableName][key + 'Id'] = {
-        type: 'integer',
-        length: 10,
-        unsigned: true
+        type: 'char',
+        length: 36,
+        notNull: true
       }
       // We need to change the index accordingly
       if (acc[tableName].index) {
@@ -101,16 +101,16 @@ function prepareTables (tables) {
       const associatedTable = /** @type {import('./utils').TableValue} */(table[key][0])
       // We create a dedicated table to store the associations
       acc[name] = /** @type {import('./utils').Table} **/({
-        reservedId,
+        reservedId: { type: 'integer', length: 10, unsigned: true, autoIncrement: true },
         [tableName + 'Id']: {
-          type: 'integer',
-          length: 10,
-          unsigned: true
+          type: 'char',
+          length: 36,
+          notNull: true
         },
         [key + 'Id']: {
-          type: 'integer',
-          length: 10,
-          unsigned: true
+          type: 'char',
+          length: 36,
+          notNull: true
         },
         foreignKeys: {
           [tableName + 'Id']: tableName,

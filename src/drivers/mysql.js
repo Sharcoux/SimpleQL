@@ -4,10 +4,11 @@
 const { WRONG_VALUE, CONFLICT, REQUIRED } = require('../errors')
 const Driver = require('./template')
 
-const { isPrimitive, operators, sequence, ensureCreation, getOptionalDep, now } = require('../utils')
+const { isPrimitive, operators, sequence, ensureCreation, getOptionalDep, now, uuid } = require('../utils')
 const log = require('../utils/logger')
 /** @type {import('mysql')} */
 const mysql = getOptionalDep('mysql', 'MySQL database type')
+const { v4: uuidv4 } = require('uuid')
 
 // Shortcuts for escaping
 /* Escaping values */
@@ -24,6 +25,8 @@ class MysqlDriver extends Driver {
     this.binaries = []
     /** @type {string[]} */
     this.dates = []
+    /** @type {string[]} */
+    this.uuid = []
     /** @type {string[]} */
     this.json = []
     /** @type {import('mysql').Pool} */
@@ -142,7 +145,7 @@ class MysqlDriver extends Driver {
   /**
    * Insert an entry into the current database
    * @param {import('./template').CreateParam} createParam The object describing the request
-   * @returns {Promise<(string | number)[]>} The results ids
+   * @returns {Promise<(string)[]>} The results ids
    */
   async create ({ table, elements }) {
     if (!elements) return Promise.resolve([])
@@ -163,9 +166,13 @@ class MysqlDriver extends Driver {
       const query = `INSERT INTO ${ei(table)} (
         ${Object.keys(element).map(k => ei(k)).join(', ')}
       ) VALUES (
-        ${Object.keys(element).map(k => this._escapeValue(table, k, element[k])).join(', ')}
+        ${Object.keys(element).map(k => {
+          // Handle UUID default value
+          if (this.uuid.includes(table + '.' + k)) element[k] = uuidv4()
+          return this._escapeValue(table, k, element[k])
+        }).join(', ')}
       )`
-      return this.query(query).catch(errorHandler(table, 'create')).then(results => Array.isArray(results) ? results.map(result => result.insertId) : results.insertId)
+      return this.query(query).catch(errorHandler(table, 'create')).then(() => element.reservedId)
     }))
   }
 
@@ -210,13 +217,14 @@ class MysqlDriver extends Driver {
    * @param {import('../utils').Column} data The instructions for this column
    */
   _processColumnType (table, name, data) {
-    const { type, length } = data
+    const { type, length, defaultValue } = data
     const lengthRequired = ['char', 'binary', 'varbinary', 'decimal', 'varchar', 'string']
     // We record binary columns to not escape their values during INSERT or UPDATE
     if (type === 'binary' || type === 'varbinary') this.binaries.push(`${table}.${name}`)
     if (lengthRequired.includes(type) && !length) throw new Error(`You must specify the length of columns of type ${type}, such as ${name} in ${table}.`)
     else if (type === 'dateTime') this.dates.push(`${table}.${name}`)
     else if (type === 'json') this.json.push(`${table}.${name}`)
+    else if (defaultValue === uuid) this.uuid.push(`${table}.${name}`)
   }
 
   /**
@@ -248,9 +256,9 @@ class MysqlDriver extends Driver {
       let query = `${name} ${convertType(type)}`
       if (length) query += `(${length})`
       if (unsigned) query += ' UNSIGNED'
-      if (notNull) query += ' NOT NULL'
+      if (notNull || defaultValue === uuid) query += ' NOT NULL'
       if (defaultValue === now) query += ' DEFAULT CURRENT_TIMESTAMP'
-      else if (defaultValue) query += ` DEFAULT ${this._escapeValue(table, name, defaultValue)}`
+      else if (defaultValue && defaultValue !== uuid) query += ` DEFAULT ${this._escapeValue(table, name, defaultValue)}`
       if (autoIncrement) query += ' AUTO_INCREMENT'
       return query
     })

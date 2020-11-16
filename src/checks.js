@@ -40,7 +40,7 @@ function checkTables (tables) {
       // Is the type supported
       if (!acceptedTypes.includes(type)) throw new Error(`${value} is invalid value for ${field} in ${tableName}. Valid types are: ${acceptedTypes.join(', ')}`)
       // Is the type numeric when unsigned is provided
-      if (!numeric.includes(type) && unsigned) throw new Error(`column ${field} is of type ${type} which doesn't accept unsigned flag.`)
+      if (unsigned && numeric.includes(type)) throw new Error(`The column ${field} as been marked as unsigned in table ${tableName} but the type is ${type}. We expect a numeric type.`)
 
       // We check for each type that the size property is valid
       switch (type) {
@@ -79,6 +79,8 @@ function checkTables (tables) {
 
       // We check if notNull is set when defaultValue is null
       if (defaultValue === null && notNull === true) throw new Error(`The default value is null whereas the notNull flag is set to true in field ${field} in table ${tableName}.`)
+
+      if (defaultValue === 'uuid' && (type !== 'char' || length !== 36)) throw new Error(`To use UUID as default value for ${field} in table ${tableName}, you need to set type as 'char' and length as '36'. You specified '${type}' and '${length}' instead.`)
     }
 
     // Check index field
@@ -202,7 +204,7 @@ function checkRules (rules, tables) {
     const rule = rules[key]
 
     Object.keys(rule).forEach(column => {
-      const value = rule[column]
+      const value = /** @type {import('./accessControl').ColumnRule} */(rule[column])
       if (table[column]) {
         if (primitives.includes(column)) return checkRule(value, ['read', 'write'], column)
         if (objects.includes(column)) return checkRule(value, ['read', 'write'], column)

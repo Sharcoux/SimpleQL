@@ -29,7 +29,7 @@
 /**
 * @typedef UpdateParam Edit data in the current database
 * @property {string} table The table name
-* @property {Object.<string, string | number>} values The values to edit
+* @property {Object.<string, string>} values The values to edit
 * @property {Object=} where The constraints for the request
 */
 
@@ -82,7 +82,7 @@ class Driver {
   /**
    * Insert an entry into the current database
    * @param {CreateParam} createParam The object describing the request
-   * @returns {Promise<(string | number)[]>} The results ids
+   * @returns {Promise<(string)[]>} The results ids
    */
   async create({ table, elements }) {
     return Promise.resolve([])

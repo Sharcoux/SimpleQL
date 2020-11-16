@@ -1,5 +1,6 @@
 // @ts-check
-const { getOptionalDep, merge, isPrimitive, filterObject } = require('../../utils')
+const { getOptionalDep, merge, isPrimitive, filterObject, stringify } = require('../../utils')
+const logger = require('../../utils/logger')
 const Driver = require('../template')
 const { dependantTables, helperGetter } = require('./adapters')
 const { tablesModel } = require('./tables')
@@ -100,7 +101,7 @@ function stripeToSimpleQL (keys, object) {
     if (key === 'reservedId') return
     if (key.endsWith('Id')) {
       const shortKey = key.substring(0, key.length - 2)
-      result[key] = object[shortKey].id
+      result[key] = typeof object[shortKey] === 'string' ? object[shortKey] : object[shortKey].id
       delete result[shortKey]
     }
   })
@@ -242,17 +243,20 @@ class StripeDriver extends Driver {
    * @returns {Promise<import('../../utils').Element[]>} The results
    */
   async get ({ table, search, where, offset, limit, order }) {
+    logger('database query', 'get: ' + stringify({ table, search, where, offset, limit, order }))
     const dependency = dependantTables[table]
     if (dependency && !where[dependency + 'Id']) return Promise.reject(`You need to specify ${dependency} field in table ${table} to get data from Stripe API.`)
     try {
       if (!search.length) return Promise.resolve([])
-      const results = await this._getAll({ table, where, keys: search })
+      let results = await this._getAll({ table, where, keys: search })
       if (order) results.sort(sortFunction(order))
       // Drop the first elements if offset is provided
       if (offset) results.splice(0, offset)
       // Limit the result if provided
       if (limit) results.splice(limit, results.length - limit)
-      return results.map(result => filterObject(result, search))
+      results = results.map(result => filterObject(result, search))
+      logger('database result', stringify(results))
+      return results
     } catch (err) {
       Object.assign(err, { table })
       errorHandler(err)
@@ -265,11 +269,13 @@ class StripeDriver extends Driver {
    * @returns {Promise<any[]>} The results
    */
   async delete ({ table, where }) {
+    logger('database query', 'delete: ' + stringify({ table, where }))
     const dependence = dependantTables[table]
     if (dependence && !where[dependence + 'Id']) return Promise.reject(`You need to specify ${dependence} field in table ${table} to delete data from Stripe API.`)
     try {
       const elements = await this._getAll({ table, where, keys: [] })
       this.toBeDeleted[table].push(...elements)
+      logger('database result', stringify(elements))
       return elements
     } catch (err) {
       Object.assign(err, { table })
@@ -280,9 +286,10 @@ class StripeDriver extends Driver {
   /**
    * Insert an entry into the current database
    * @param {import('../template').CreateParam} createParam The object describing the request
-   * @returns {Promise<(string | number)[]>} The results ids
+   * @returns {Promise<(string)[]>} The results ids
    */
   async create ({ table, elements }) {
+    logger('database query', 'create: ' + stringify({ table, elements }))
     const array = Array.isArray(elements) ? elements : [elements]
     const dependence = dependantTables[table]
     if (dependence && array.find(a => !a[dependence + 'Id'])) return Promise.reject(`You need to specify ${dependence} field in table ${table} to create data with Stripe API.`)
@@ -295,6 +302,7 @@ class StripeDriver extends Driver {
       // @ts-ignore
       return helper.create(simpleQLData)
     }))
+    logger('database result', stringify(results))
     return results.map(o => o.id)
   }
 
@@ -304,12 +312,14 @@ class StripeDriver extends Driver {
    * @returns {Promise<void>} The results
    */
   async update ({ table, values, where }) {
+    logger('database result', 'update: ' + stringify({ table, values, where }))
     const dependence = dependantTables[table]
     if (dependence && !where[dependence + 'Id']) return Promise.reject(`You need to specify ${dependence} field in table ${table} to update data from Stripe API.`)
     if (values[dependence]) return Promise.reject(`The value for ${dependence} in table ${table} cannot be update with Stripe API`)
     try {
       const elements = await this._getAll({ table, where, keys: Object.keys(values) })
       this.toBeUpdated[table].push(...elements.map(elt => ({ id: elt.reservedId, values })))
+      logger('database result', stringify(elements))
     } catch (err) {
       Object.assign(err, { table })
       errorHandler(err)

@@ -6,7 +6,7 @@ const stripePlugin = require('./stripe')
 
 /**
  * @typedef {Object} LocalParam
- * @property {string | number} authId Indicates the id of the user this request is being executed as. Use database.privateKey for admin rights.
+ * @property {string} authId Indicates the id of the user this request is being executed as. Use database.privateKey for admin rights.
  * @property {boolean} readOnly Indicates if this request is not supposed to make any change on the database. This will skip unnessessary treatments.
  **/
 
@@ -32,7 +32,7 @@ const stripePlugin = require('./stripe')
  * @typedef {Object} UpdateResults
  * @property {import('../utils').Element[]} objects The objects being edited
  * @property {import('../utils').Element} newValues The new values affected to the objects
- * @property {Object.<string | number, import('../utils').Element>} oldValues An object mapping the id of each object being edited to their old values
+ * @property {Object.<string, import('../utils').Element>} oldValues An object mapping the id of each object being edited to their old values
 **/
 
 /**

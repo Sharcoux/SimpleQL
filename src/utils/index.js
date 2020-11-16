@@ -285,7 +285,7 @@ const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', 
  * @property {boolean=} admin Indicate if the request should be executed with admin rights
  */
 
-/** @typedef { { reservedId: string | number } & Object.<string, any> } Element */
+/** @typedef { { reservedId: string } & Object.<string, any> } Element */
 /** @typedef {{[table: string]: Element[]}} Result */
 
 /**
@@ -302,6 +302,7 @@ function modelFactory (tables) {
 
 /** Use as defaultValue to resolve as current dateTime. */
 const now = 'CURRENT_DATE_TIME'
+const uuid = 'UUID'
 
 module.exports = {
   isPrimitive,
@@ -319,5 +320,6 @@ module.exports = {
   getOptionalDep,
   ensureCreation,
   modelFactory,
-  now
+  now,
+  uuid
 }

@@ -167,7 +167,7 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
         }
         /**
            * Read the data we have stored about the provided element
-           * @param {string | number} reservedId The id of the element we are trying to get data about
+           * @param {string} reservedId The id of the element we are trying to get data about
            * @param {string[]=} properties The column we want to read from the cache
            * @returns {import('./utils').Element | undefined} The data we found about the object
            */
@@ -243,7 +243,7 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
           // If nothing matches the request, the result should be an empty array
           if (err.name === NOT_FOUND) return Promise.resolve([])
           if (err.name === WRONG_VALUE) return Promise.reject({ name: ACCESS_DENIED, message: `You are not allowed to access some data needed for your request in table ${tableName}.` })
-          console.log(err.stack)
+          console.error(err)
           return Promise.reject(err)
         }
 
@@ -525,8 +525,8 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
             // we will need the objects ids to retrieve the corresponding objects
             search: searchKeys,
             where,
-            limit: parseInt(/** @type {any} **/(request.limit), 10),
-            offset: parseInt(/** @type {any} **/(request.offset), 10),
+            limit: request.limit,
+            offset: request.offset,
             order: request.order
           })
             // We add the date to the cache as they were received from the database
@@ -657,7 +657,7 @@ function createRequestHandler ({ tables, rules, tablesModel, plugins, driver, pr
           const currentValues = {}
           const updatedKeys = [...primitivesSet, ...objectsSet]
           results.forEach(result => currentValues[result.reservedId] = filterObject(result, updatedKeys))
-          /** @type {Object.<string, string | number>} */
+          /** @type {Object.<string, string>} */
           const values = {} // The values to be edited
           const removed = {}// The elements that have been removed
           const added = {}// The elements that have been added

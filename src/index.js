@@ -8,7 +8,7 @@ const accessControl = require('./accessControl')
 const bodyParser = require('body-parser')
 const log = require('./utils/logger')
 const plugins = require('./plugins')
-const { stringify, modelFactory, now } = require('./utils')
+const { stringify, modelFactory, now, uuid } = require('./utils')
 const rateLimit = require('express-rate-limit')
 const createRequestHandler = require('./requestHandler')
 
@@ -47,7 +47,8 @@ module.exports = {
   plugins,
   getQuery,
   modelFactory,
-  now
+  now,
+  uuid
 }
 
 /**

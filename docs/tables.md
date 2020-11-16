@@ -70,7 +70,7 @@ If you need to provide more details, you can use an object to describe your data
  * **length** (in byte)
  * **unsigned** (boolean : default false)
  * **notNull** (boolean : default false)
- * **defaultValue** (same as type, or a function without parameter that will resolve as type)
+ * **defaultValue** (same as type) You can use require('simple-ql').now for dynamic current date, and require('simple-ql').uuid to generate a UUID.
  * **autoIncrement** (boolean : default false)
 
 **Example:**
@@ -86,10 +86,14 @@ If you need to provide more details, you can use an object to describe your data
       },
       createdAt: {
         type: 'date',
-        defaultValue: Date.now
+        defaultValue: now
       }
     }
 ```
+
+## reservedId
+
+Every table will receive an extra column `reservedId` of type `char/36` with defaultValue set to `uuid` that will uniquely identify an object within the database.
 
 ## notNull
 
