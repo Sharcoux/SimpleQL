@@ -70,10 +70,22 @@ function createPendingLists () {
  */
 function simpleQLToStripe (object) {
   const result = { ...object }
+  // Transform reservedId into id
   if (object.reservedId) {
     result.id = object.reservedId
     delete result.reservedId
   }
+  // Transform createdAt into created
+  if (object.createdAt) {
+    result.created = object.createdAt
+    delete result.createdAt
+  }
+  // Transform orderRef into order
+  if (object.orderRef) {
+    result.order = object.orderRef
+    delete result.orderRef
+  }
+  // Transform propId into prop
   Object.keys(object).forEach(key => {
     if (key.endsWith('Id')) {
       result[key.substring(0, key.length - 2)] = object[key]
@@ -93,10 +105,24 @@ function simpleQLToStripe (object) {
  */
 function stripeToSimpleQL (keys, object) {
   const result = { ...object }
+  // Transform id into reservedId
   if (object.id) {
     result.reservedId = object.id
     // delete result.id
   }
+  // Transform created into createdAt
+  if (object.created) {
+    result.createdAt = object.created
+    delete result.created
+  }
+
+  // Transform order into orderRef
+  if (object.order) {
+    result.orderRef = object.order
+    delete result.order
+  }
+
+  // Transform prop into propId
   keys.forEach(key => {
     if (key === 'reservedId') return
     if (key.endsWith('Id')) {

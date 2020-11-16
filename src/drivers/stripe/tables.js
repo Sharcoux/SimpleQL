@@ -23,7 +23,7 @@ Object.assign(Customer, {
   shipping: 'json',
   object: 'string',
   balance: 'integer',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   currency: 'string',
   default_source: Source,
   delinquent: 'boolean',
@@ -48,7 +48,7 @@ Object.assign(Product, {
   object: 'string',
   attributes: 'json',
   caption: 'string',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   deactivate_on: 'json',
   images: 'json',
   livemode: 'boolean',
@@ -72,7 +72,7 @@ Object.assign(Price, {
   unit_amount: 'integer',
   object: 'string',
   billing_scheme: 'string',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   livemode: 'boolean',
   lookup_key: 'string',
   tiers: 'json', // expandable
@@ -94,7 +94,7 @@ Object.assign(Plan, {
   aggregate_usage: 'string',
   amount_decimal: 'string',
   billing_scheme: 'string',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   interval_count: 'integer',
   livemode: 'boolean',
   tiers: 'json', // expandable
@@ -124,7 +124,7 @@ Object.assign(Subscription, {
   cancel_at: 'dateTime',
   canceled_at: 'dateTime',
   collection_method: 'string',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   days_until_due: 'integer',
   default_source: Source,
   default_tax_rates: [TaxRate],
@@ -149,7 +149,7 @@ Object.assign(SubscriptionItem, {
   subscription: Subscription,
   object: 'string',
   billing_thresholds: 'json',
-  created: 'integer',
+  createdAt: 'dateTime',
   tax_rates: [TaxRate]
 })
 
@@ -164,7 +164,7 @@ Object.assign(SubscriptionSchedule, {
   object: 'string',
   canceled_at: 'dateTime',
   completed_at: 'dateTime',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   default_settings: 'json',
   end_behavior: 'string',
   livemode: 'boolean',
@@ -187,7 +187,7 @@ Object.assign(Account, {
   object: 'string',
   business_profile: 'json',
   charges_enabled: 'boolean',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   default_currency: 'string',
   details_submitted: 'boolean',
   external_accounts: [ExternalAccount],
@@ -223,7 +223,7 @@ Object.assign(Invoice, {
   attempt_count: 'integer',
   attempted: 'boolean',
   billing_reason: 'string',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   custom_fields: 'json',
   customer_address: 'json',
   customer_email: 'string',
@@ -271,7 +271,7 @@ Object.assign(TaxRate, {
   metadata: 'json',
   percentage: 'decimal',
   object: 'string',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   livemode: 'boolean'
 })
 
@@ -282,7 +282,7 @@ Object.assign(TaxId, {
   type: 'string',
   value: 'string',
   object: 'string',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   livemode: 'boolean',
   verification: 'json'
 })
@@ -314,7 +314,7 @@ Object.assign(PaymentMethod, {
   bancontact: 'json',
   card: 'json',
   card_present: 'json',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   eps: 'json',
   fpx: 'json',
   giropay: 'json',
@@ -341,7 +341,7 @@ Object.assign(SetupIntent, {
   object: 'string',
   application: 'json', // Can be mapped to Application
   cancellation_reason: 'string',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   latest_attempt: 'json', // Can be mapped to SetupAttempt, but impossible to retrieve the data with Stripe helper
   livemode: 'boolean',
   mandate: Mandate,
@@ -377,7 +377,7 @@ Object.assign(PaymentIntent, {
   cancellation_reason: 'string',
   capture_method: 'string',
   confirmation_method: 'string',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   invoice: Invoice,
   livemode: 'boolean',
   on_behalf_of: Account,
@@ -401,7 +401,7 @@ Object.assign(Source, {
   object: 'string',
   client_secret: 'string',
   code_verification: 'json',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   flow: 'string',
   livemode: 'boolean',
   receiver: 'json',
@@ -438,7 +438,7 @@ Object.assign(Coupon, {
   percent_off: 'decimal',
   object: 'string',
   applies_to: 'json', // applies_to.products is mapped to [Product]. We could map those with a trick.
-  created: 'dateTime',
+  createdAt: 'dateTime',
   livemode: 'boolean',
   max_redemptions: 'integer',
   redeem_by: 'dateTime',
@@ -519,7 +519,7 @@ Object.assign(PromotionCode, {
   metadata: 'json',
   object: 'string',
   active: 'boolean',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   customer: Customer,
   expires_at: 'dateTime',
   livemode: 'boolean',
@@ -568,7 +568,7 @@ Object.assign(Mandate, {
 //   id: 'string',
 //   object: 'string',
 //   application: 'json', // Can be mapped to Application
-//   created: 'dateTime',
+//   createdAt: 'dateTime',
 //   customer: Customer,
 //   livemode: 'boolean',
 //   on_behalf_of: Account,
@@ -589,7 +589,7 @@ Object.assign(Review, {
   object: 'string',
   billing_zip: 'string',
   closed_reason: 'string',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   ip_address: 'string',
   ip_address_location: 'json',
   livemode: 'boolean',
@@ -624,13 +624,13 @@ Object.assign(Charge, {
   application_fee_amount: 'integer',
   calculated_statement_descriptor: 'string',
   captured: 'boolean',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   failure_code: 'string',
   failure_message: 'string',
   fraud_details: 'json',
   livemode: 'boolean',
   on_behalf_of: Account,
-  order: 'string',
+  orderRef: 'string',
   outcome: 'json',
   paid: 'boolean',
   payment_method: PaymentMethod,
@@ -657,7 +657,7 @@ Object.assign(BalanceTransaction, {
   type: 'string',
   object: 'string',
   available_on: 'dateTime',
-  created: 'dateTime',
+  createdAt: 'dateTime',
   exchange_rate: 'decimal',
   reporting_category: 'string'
 })
@@ -674,7 +674,7 @@ Object.assign(Refund, {
   status: 'string',
   object: 'string',
   balance_transaction: BalanceTransaction,
-  created: 'dateTime',
+  createdAt: 'dateTime',
   failure_balance_transaction: BalanceTransaction,
   failure_reason: 'string',
   receipt_number: 'string',
@@ -692,7 +692,7 @@ Object.assign(Transfer, {
   object: 'string',
   amount_reversed: 'integer',
   balance_transaction: BalanceTransaction,
-  created: 'dateTime',
+  createdAt: 'dateTime',
   destination_payment: 'string', // Can be mapped to Payment
   livemode: 'boolean',
   reversals: [TransferReversal], // list
@@ -710,7 +710,7 @@ Object.assign(TransferReversal, {
   transfer: Transfer,
   object: 'string',
   balance_transaction: BalanceTransaction,
-  created: 'dateTime',
+  createdAt: 'dateTime',
   destination_payment_refund: Refund,
   source_refund: Refund
 })

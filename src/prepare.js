@@ -24,7 +24,9 @@ function prepareTables (tables) {
   // We transform the tables into a valid data model
   const tablesModel = Object.keys(tables).reduce((acc, tableName) => {
     const table = tables[tableName]
-    const { empty, primitives, objects, arrays } = classifyData(table)
+    const { empty, primitives, objects, arrays, reserved } = classifyData(table)
+    const reservedKey = reserved.find(key => !['tableName', 'index', 'notNull'].includes(key))
+    if (reservedKey) throw new Error(`${reservedKey} is a reserved key and cannot be used as a column of table ${tableName}.`)
 
     // @ts-ignore
     acc[tableName] = {} // Create table entry

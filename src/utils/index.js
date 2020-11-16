@@ -276,7 +276,7 @@ async function ensureCreation (databaseName) {
   )
 }
 
-const reservedKeys = ['reservedId', 'set', 'get', 'created', 'deleted', 'edited', 'delete', 'create', 'add', 'remove', 'not', 'like', 'or', 'limit', 'order', 'offset', 'tableName', 'foreignKeys', 'type', 'parent', 'index', 'notNull', 'reserved', 'required']
+const reservedKeys = ['reservedId', 'set', 'get', 'created', 'deleted', 'edited', 'delete', 'create', 'add', 'remove', 'not', 'like', 'or', 'limit', 'order', 'offset', 'tableName', 'foreignKeys', 'parent', 'index', 'notNull', 'reserved', 'required']
 const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', '~', '!']
 
 /**
