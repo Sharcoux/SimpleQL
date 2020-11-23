@@ -166,7 +166,7 @@ class StripeDriver extends Driver {
     this.toBeCreated = createPendingLists()
     /** @type {StripeTables<string[]>} */
     this.toBeDeleted = createPendingLists()
-    /** @type {StripeTables<{ id: string, values: Object }[]>} */
+    /** @type {StripeTables<{ element: Object, values: Object }[]>} */
     this.toBeUpdated = createPendingLists()
 
     this.inTransaction = false
@@ -191,11 +191,11 @@ class StripeDriver extends Driver {
     // Update all pending objects
     Promise.all(Object.keys(this.toBeUpdated).map(async key => {
       const helper = this.getHelper(/** @type {StripeTable} **/(key))
-      await Promise.all(this.toBeUpdated[key].map(({ id, values }) => {
+      await Promise.all(this.toBeUpdated[key].map(({ element, values }) => {
         const simpleQLData = simpleQLToStripe(values)
         // TODO: handle objects that can't be updated this way
         // @ts-ignore
-        return helper.update(id, simpleQLData)
+        return helper.update(element, simpleQLData)
       }))
     }))
     // delete all pending objects
@@ -344,7 +344,7 @@ class StripeDriver extends Driver {
     if (values[dependence]) return Promise.reject(`The value for ${dependence} in table ${table} cannot be update with Stripe API`)
     try {
       const elements = await this._getAll({ table, where, keys: Object.keys(values) })
-      this.toBeUpdated[table].push(...elements.map(elt => ({ id: elt.reservedId, values })))
+      this.toBeUpdated[table].push(...elements.map(element => ({ element, values })))
       logger('database result', stringify(elements))
     } catch (err) {
       Object.assign(err, { table })
