@@ -331,6 +331,8 @@ function formatRequest (request, table) {
     const tableData = classifyData(table)
     request.get = [...tableData.primitives]
   }
+  // If there is no action in the request, we require the reservedId
+  if (!request.get && !request.set && !request.create && !request.delete) request.get = ['reservedId']
   return /** @type {FormattedRequest} **/(request)
 }
 
