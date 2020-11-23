@@ -83,10 +83,11 @@ const stripe = {
   secretKey: 'string',
   customerTable: 'string',
   webhookURL: 'string',
+  proxyWebhookPath: 'string',
   webhookSecret: 'string',
   listeners: {},
   database: 'string',
-  required: ['secretKey', 'customerTable', 'webhookURL', 'database'],
+  required: ['secretKey', 'customerTable', 'webhookURL', 'database', 'adminKey'],
   strict: true
 }
 
