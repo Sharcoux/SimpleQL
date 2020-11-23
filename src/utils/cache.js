@@ -38,11 +38,13 @@ class Cache {
    * Read the data we have stored about the provided element
    * @param {string} tableName The table where the data are stored
    * @param {string} reservedId The id of the element we are trying to get data about
-   * @param {string[]=} properties The column we want to read from the cache
+   * @param {string[]=} properties The columns we want to read from the cache
    * @returns {import('../utils').Element | undefined} The data we found about the object
    */
   readCache (tableName, reservedId, properties) {
     if (!this.cache[tableName]) return
+    // If we want just the reservedId that we provided, we can just give it back
+    if (reservedId && (!properties || (properties.length === 1 && properties[0] === 'reservedId'))) this.addCache(tableName, { reservedId })
     const cached = reservedId && this.cache[tableName] && this.cache[tableName][reservedId]
     if (!cached) return
     if (!properties) properties = Object.keys(cached)

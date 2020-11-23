@@ -202,9 +202,18 @@ class TableResolver {
 
     this.updateRequestData = this.updateRequestData.bind(this)
     this.create = this.create.bind(this)
-    this.updateRequestData = this.updateRequestData.bind(this)
-    this.updateRequestData = this.updateRequestData.bind(this)
-    this.updateRequestData = this.updateRequestData.bind(this)
+    this.remove = this.remove.bind(this)
+    this.update = this.update.bind(this)
+    this.updateChildrenArrays = this.updateChildrenArrays.bind(this)
+    this.resolveChildrenArrays = this.resolveChildrenArrays.bind(this)
+    this.get = this.get.bind(this)
+    this.resolve = this.resolve.bind(this)
+    this.resolveObjects = this.resolveObjects.bind(this)
+    this.getObjects = this.getObjects.bind(this)
+    this.getChildrenArrays = this.getChildrenArrays.bind(this)
+    this.controlAccess = this.controlAccess.bind(this)
+    this.pluginCall = this.pluginCall.bind(this)
+    this.applyInTable = this.applyInTable.bind(this)
   }
 
   /**
@@ -397,8 +406,9 @@ class TableResolver {
     this.objects.forEach(key => where[key + 'Id'] = this.request[key + 'Id'])
     if (impossible) return Promise.resolve([])
     // We try to read the data from the cache
-    const cachedData = this.cache.readCache(this.tableName, this.request.reservedId, searchKeys)
-    if (cachedData) return Promise.resolve([cachedData])
+    const ids = Array.isArray(this.request.reservedId) ? this.request.reservedId : [this.request.reservedId]
+    const cachedData = ids.map(id => this.cache.readCache(this.tableName, id, searchKeys)).filter(data => data)
+    if (cachedData.length === ids.length) return Promise.resolve(cachedData)
     const results = await this.driver.get({
       table: this.tableName,
       // we will need the objects ids to retrieve the corresponding objects
