@@ -151,7 +151,7 @@ function checkTables (tables) {
       if (Object.values(tables).includes(value)) return
       // a descriptive object describing the column properties
       try {
-        check(dbColumn, value)
+        check(dbColumn, value, `Column ${field} in table ${tableName}`)
       } catch (err) {
         throw new Error(`${field} in ${tableName} received an invalid object. It should be a string, an array, a descriptive object containing a 'type' property', or one of the tables. ${err}`)
       }
@@ -171,7 +171,7 @@ function checkTables (tables) {
  **/
 function checkDatabase (data) {
   try {
-    check(database, data)
+    check(database, data, 'the Database parameter')
   } catch (err) {
     throw new Error(`The database object provided is incorrect. ${err}`)
   }
@@ -192,7 +192,7 @@ function checkRules (rules, tables) {
    */
   function checkRule (value, possibleValues, column) {
     try {
-      return check(possibleValues.reduce((model, key) => ({ ...model, [key]: 'function' }), { strict: true }), value)
+      return check(possibleValues.reduce((model, key) => ({ ...model, [key]: 'function' }), { strict: true }), value, `The Rule for column ${column}`)
     } catch (err) {
       throw new Error(`We expect rule ${column} to receive function parameters for keys ${JSON.stringify(possibleValues)}, but we received ${stringify(value)}`)
     }

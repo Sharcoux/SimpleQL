@@ -121,7 +121,7 @@ async function createServer ({ tables = {}, database, rules = {}, plugins = [], 
     /** @type {Query} */
     const dbQuery = (query, locals = { authId: database.privateKey, readOnly: false }) => dbQueryStack[databaseName] = dbQueryStack[databaseName].catch(() => {}).then(() => requestHandler(query, locals))
     dbReady(dbQuery)
-    return dbQuery
+    return await dbQuery
   } catch (err) {
     dbReject(err)
     return Promise.reject(err)
@@ -135,6 +135,7 @@ async function createServer ({ tables = {}, database, rules = {}, plugins = [], 
  **/
 function simpleQL (databaseName) {
   return async (req, res, next) => {
+    res.locals.databaseName = databaseName
     // We forward the request to the database
     getQuery(databaseName)
       .then(query => query(req.body, /** @type {import('./plugins').Local} **/(res.locals)))

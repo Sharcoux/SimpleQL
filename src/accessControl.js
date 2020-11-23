@@ -112,16 +112,12 @@ function getTargetObject (object, field) {
  **/
 function is (field) {
   if (!field || !(Object(field) instanceof String)) throw new Error('`is` rule expects its parameter to be a string matching a field or a table. Please refer to the documentation.')
-  return ({ tableName }) => async ({ authId, request, object, requestFlag }) => {
-    if (requestFlag) {
-      const target = getObjectInRequest(request, field)
-      return target && target.reservedId === authId ? Promise.resolve() : Promise.reject(`is(${field}) rule: ${authId} is not ${field} of ${JSON.stringify(request)}.`)
-    }
+  return ({ tables, tableName }) => async ({ authId, request, object, requestFlag, query }) => {
     if (field === 'self') {
       return object.reservedId === authId ? Promise.resolve() : Promise.reject(`is(self) rule: ${authId} is not the id of ${JSON.stringify(object)}.`)
     }
-    const target = getTargetObject(object, field)
-    return target && target.reservedId === authId ? Promise.resolve() : Promise.reject(`is(${field}) rule: ${authId} is not ${field} of ${JSON.stringify(object)}.`)
+    const isValid = object => object && object.reservedId === authId
+    return checkInTable({ field, tables, tableName, authId, object, request, requestFlag, query, ruleName: 'is', isValid })
   }
 }
 
@@ -199,26 +195,25 @@ async function checkInTable ({ field, tables, tableName, authId, object, request
     if (!Array.isArray(obj)) return isValid([obj]) ? Promise.resolve() : Promise.reject(`${ruleName}(${field}) rule: The field ${field}.reservedId must be ${authId} in request ${JSON.stringify(request)} in table ${tableName}.`)
     return isValid(obj) ? Promise.resolve() : Promise.reject(`${ruleName}(${field}) rule: ${authId} could not be found in ${field} of ${JSON.stringify(request)} in ${tableName}.`)
   } else if (tables[tableName][field]) {
-    // We check if the current object contains a property with the field name, and if the
-    return query({
-      [tableName]: {
-        reservedId: object.reservedId,
-        get: [field]
-      }
-    }, { admin: true, readOnly: true }).then(({ [tableName]: results }) => {
-      if (results.find(result => !isValid(result[field]))) return Promise.reject(`${ruleName}(${field}) rule: ${authId} not ${field} of ${object.reservedId} in ${tableName}.`)
-      return Promise.resolve()
-    })
+    // We check if the current object contains a property with the field name, and if the value is valid
+    console.log(object, field)
+    let result = object
+    if (object[field] === undefined) {
+      const results = await query({
+        [tableName]: {
+          reservedId: object.reservedId,
+          get: [field]
+        }
+      }, { admin: true, readOnly: true })
+      result = results[tableName][0]
+      console.log(result, field)
+    }
+    if (!isValid(result[field])) return Promise.reject(`${ruleName}(${field}) rule: ${authId} not ${field} of ${JSON.stringify(result)} in ${tableName}.`)
+    return Promise.resolve()
   } else {
     // We check if the field denotes a whole table and if this table contains a property that could match
     const target = getTargetObject(object, field)
     if (target) {
-      if (!Array.isArray(target)) {
-        return Promise.reject({
-          name: DATABASE_ERROR,
-          message: `You cannot use ${ruleName} rule on ${field} in ${tableName} as it is not an array.`
-        })
-      }
       return isValid(target) ? Promise.resolve() : Promise.reject(`${ruleName}(${field}) rule`)
     }
     // We try to look into the whole table

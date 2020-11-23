@@ -8,11 +8,11 @@ const categories = {
   // 'database result': 'default',
   // 'resolution part': 'default',
   // 'resolution part title': 'magenta',
-  // 'access warning': 'yellow',
+  'access warning': 'yellow',
+  // 'login' : 'cyan',
   info: 'cyan',
   warning: 'yellow',
   error: 'red'
-  // 'login' : 'cyan',
 }
 
 const colors = {

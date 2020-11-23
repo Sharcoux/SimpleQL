@@ -143,23 +143,39 @@ function classifyData (object) {
  * @property {Object=} set Change the data in the keys of this object with the values of this object
  * @property {boolean=} create Insert an entry in this table
  * @property {boolean=} deled Remove an entry in this table
- * @property {Object[]=} add Add an entry in the association table
- * @property {Object[]=} remove Remove an entry in the association table
  * @property {number=} limit Limit the results to this much
  * @property {number=} offset Ignore this much first results
  * @property {string[]=} order Order the results according to those columns. Preceed by '-' for descending order
+ */
+
+/**
+ * @typedef {Object} FormattedRequestOperators
+ * @property {string[]=} get Retrieves the data from the specified column
+ * @property {Object=} set Change the data in the keys of this object with the values of this object
+ * @property {boolean=} create Insert an entry in this table
+ * @property {boolean=} deled Remove an entry in this table
+ * @property {number=} limit Limit the results to this much
+ * @property {number=} offset Ignore this much first results
+ * @property {string[]=} order Order the results according to those columns. Preceed by '-' for descending order
+ */
+
+/**
+ * @typedef {Object} RequestConstraints
+ * @property {Object[]=} add Add an entry in the association table
+ * @property {Object[]=} remove Remove an entry in the association table
  * @property {string=} like Filter with this regex
  * @property {string | number=} gt Filter results greater than this value
  * @property {string | number=} ge Filter results greater or equal to this value
  * @property {string | number=} lt Filter results lesser than this value
  * @property {string | number=} le Filter results lesser or equal to this value
  * @property {string | number=} not Filter the result that do not match this value
-*/
+ */
 
 /** @typedef {{ '<'?: string; '>'?: string; '<='?: string; '>='?: string; '~'?: string; '!'?: string }} RequestShorthands */
 
-/** @typedef {RequestOperators & RequestShorthands} RequestInstructions */
-/** @typedef {RequestInstructions & Object<string, any>} Request */
+/** @typedef {RequestConstraints & RequestShorthands} RequestInstructions */
+/** @typedef {RequestOperators & Object<string, RequestInstructions & any>} Request */
+/** @typedef {FormattedRequestOperators & Object<string, RequestInstructions & any>} FormattedRequest */
 
 /**
  * @typedef {Object} RequestClassification
@@ -300,6 +316,24 @@ function modelFactory (tables) {
   return new Proxy(tables, { get: (target, name) => (target[name] = {}) })
 }
 
+/**
+ * Handle special request values: '*' means all column, and when deleting, we retrieve all previous data.
+ * This function acts by border effects
+ * @param {Request} request The request to analyse
+ * @param {TableDeclaration} table The request to analyse
+ * @returns {FormattedRequest} The request, but formatted.
+ */
+function formatRequest (request, table) {
+  // When we delete an object, we want to retrieve all their data before it disappear from the database
+  if (request.delete) request.get = '*'
+  // We allow using '*' to mean all columns
+  if (request.get === '*') {
+    const tableData = classifyData(table)
+    request.get = [...tableData.primitives]
+  }
+  return /** @type {FormattedRequest} **/(request)
+}
+
 /** Use as defaultValue to resolve as current dateTime. */
 const now = 'CURRENT_DATE_TIME'
 const uuid = 'UUID'
@@ -311,6 +345,7 @@ module.exports = {
   merge,
   stringify,
   filterObject,
+  formatRequest,
   classifyData,
   classifyRequestData,
   reservedKeys,

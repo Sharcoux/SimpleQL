@@ -53,7 +53,7 @@ const { publicKey, privateKey } = keyPair
 function checkType (field, table, expectedType, minSize, tableName) {
   const data = table[field]
   if (!data || data.type !== expectedType) throw new Error(`${tableName} should contain a field ${field} of type ${expectedType}, but we received: ${data && data.type}`)
-  check(dbColumn, data)
+  check(dbColumn, data, `column ${field} in table ${table}`)
   if (!data.length || parseInt(data.length + '', 10) < minSize) throw new Error(`${data} in ${tableName} should have a length of a at least ${minSize}`)
   return true
 }
@@ -160,7 +160,7 @@ function createLoginPlugin (config) {
   /** Prevent using jwt as column name if we use this plugin */
   const reservedKeys = require('../utils').reservedKeys
   if (!reservedKeys.includes('jwt')) reservedKeys.push('jwt')
-  check(loginModel, config)
+  check(loginModel, config, 'LoginConfig for Login Plugin')
   const { login = 'email', password = 'password', salt, userTable = 'User', firstname, lastname, plugins: { google, facebook } = {}, jwtConfig = { algorithm: 'RS256', expiresIn: '2h' } } = config
 
   // We need to separate the options between Verify and Sign options because the api of jsonwebtoken is stupid
@@ -177,24 +177,25 @@ function createLoginPlugin (config) {
     middleware: async (req, res, next) => {
       const token = req.headers && req.headers.authorization && req.headers.authorization.split(' ')[1]
       if (token) {
-        // A request is being authenticated with a JWT token
-        checkJWT(token, jwtVerifyConfig)
+        try {
+          // A request is being authenticated with a JWT token
+          const decoded = await checkJWT(token, jwtVerifyConfig)
           // TODO handle the possibility to use UUID instead of number for the reservedId
-          .then(decoded => (res.locals.authId = decoded.id))
-          .then(() => logger('login', `${userTable} ${res.locals.authId} is making a request.`))
-          .then(() => next())
-          .catch(error => {
-            const status =
+          res.locals.authId = decoded.id
+          logger('login', `${userTable} ${res.locals.authId} is making a request.`)
+          next()
+        } catch (error) {
+          const status =
               error.name === 'JsonWebTokenError' ? 400
                 : error.name === 'NotBeforeError' ? 425
                   : error.name === 'TokenExpiredError' ? 401
                     : 401
-            const message =
+          const message =
               error.message === 'jwt signature is required' ? 'This jwt error should not be happenning. Please report this.'
                 : error.message === 'invalid signature' ? 'There was an issue when reading the public.pem file. Please report this.'
                   : error.message
-            next({ ...error, message, status })
-          })
+          next({ ...error, message, status })
+        }
       } else next()
     },
     preRequisite: async (tables) => {

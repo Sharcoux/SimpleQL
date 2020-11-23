@@ -27,7 +27,7 @@ const { expandable, asList } = require('./tables')
 
 /** @type {import('./index').StripeTables<string[]>} These are the props that we can provide to get more accurate data from list() */
 const props = {
-  Customer: ['create', 'email'],
+  Customer: ['created', 'email'],
   Product: ['active', 'created', 'type', 'url', 'shippable', 'ids'],
   Plan: ['active', 'created', 'product'],
   Price: ['active', 'created', 'recurring', 'product', 'currency', 'lookup_keys', 'type'],

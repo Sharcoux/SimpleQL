@@ -79,6 +79,7 @@ const security = {
 
 /** @type Model */
 const stripe = {
+  adminKey: 'string',
   secretKey: 'string',
   customerTable: 'string',
   webhookURL: 'string',

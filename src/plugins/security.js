@@ -22,7 +22,7 @@ const path = require('path')
  * @returns {import('.').Plugin}
  */
 const createSecurityPlugin = (app, config) => {
-  check(securityModel, config)
+  check(securityModel, config, 'The Security Plugin Config')
   const { domains, webmaster, helmet: helmetConfig } = config
   const helmet = getOptionalDep('helmet', 'SecurityPlugin')
   const greenlock = getOptionalDep('greenlock-express', 'SecurityPlugin')

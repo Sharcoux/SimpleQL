@@ -5,8 +5,8 @@ const { stringify, toType } = require('./')
 
 /**
  * Check that the data matches the model
- * @param {import('./types').Model} model
- * @param {any} data
+ * @param {import('./types').Model} model The model of the data structure
+ * @param {any} data The data to compare with the struture
  * @throws Throw an error if the data doesn't match the model
  **/
 function checkType (model, data) {
@@ -94,14 +94,15 @@ function generateError (expected, received, path, required) {
  * Check
  * @param {import('./types').Model} model
  * @param {any} data
+ * @param {string} description A description of the object we are controlling
  * @throws Throw an error if the data doesn't match the model
  */
-function check (model, data) {
+function check (model, data, description) {
   try {
     checkType(model, data)
   } catch (err) {
     const { expected, received, path, required } = err
-    if (expected || received) throw new Error(`We expected ${stringify(expected)}${required ? '(required)' : ''} but we received ${stringify(received)}${path && ` for ${path}`} in ${stringify(data)}`)
+    if (expected || received) throw new Error(`The shape of ${description} is wrong. We expected ${stringify(expected)}${required ? '(required)' : ''} but we received ${stringify(received)}${path && ` for ${path}`} in ${stringify(data)}`)
     else throw err
   }
 }

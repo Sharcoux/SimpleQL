@@ -10,10 +10,12 @@ To use the plugin, you will need to provide the following parameters:
  The `config` parameter is an object with the following properties:
 
  * **secretKey**: You Stripe secret API key
+ * **adminKey**: The same string you provided to database.privateKey (See [Database](../database.md))
  * **customerTable**: The table where the users will be stored in the SimpleQL database
  * **customerStripeId**: The column where the Stripe customer id can be stored in the user table
  * **database**: The name of the SimpleQL database
  * **webhookURL**: The full url Stripe should use for webhooks. The app will be set to listen to this path. You don't have to do it.
+ * **proxyWebhookPath** (*optional*): If using a proxy, the path the express app should actually be listening too.
  * **webhookSecret** (*optional*): The secret key provided by stripe for [testing webhooks locally](https://stripe.com/docs/webhooks/test) 
  * **listeners** (*optional*): An object mapping the stripe webhooks to their listeners
 

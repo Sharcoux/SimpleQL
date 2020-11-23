@@ -44,17 +44,14 @@ async function createDatabase ({ tables, database, rules = {}, plugins = [] }) {
   const createDriver = require(`./drivers/${type}`)
   if (!createDriver) return Promise.reject(`${type} is not supported right now. Try mysql for instance.`)
   // create the driver to the database
-  return createDriver(database)
-    .then(driver => createTables({ driver, tables, create })
-      .then(({ tablesModel, tables: updatedTables }) => {
-        // We pre-configure the rules for this database
-        const preparedRules = prepareRules({ rules, tables: updatedTables })
-        // We check if the pre-requesites required by the plugins are met
-        return Promise.all(plugins.filter(plugin => plugin.preRequisite).map(plugin => plugin.preRequisite(updatedTables)))
-          // We return the fully configured request handler
-          .then(() => ({ tables: updatedTables, rules: preparedRules, tablesModel, driver }))
-      })
-    )
+  const driver = await createDriver(database)
+  const { tablesModel, tables: updatedTables } = await createTables({ driver, tables, create })
+  // We pre-configure the rules for this database
+  const preparedRules = prepareRules({ rules, tables: updatedTables })
+  // We check if the pre-requesites required by the plugins are met
+  await Promise.all(plugins.filter(plugin => plugin.preRequisite).map(plugin => plugin.preRequisite(updatedTables)))
+  // We return the fully configured request handler
+  return { tables: updatedTables, rules: preparedRules, tablesModel, driver }
 }
 
 /**

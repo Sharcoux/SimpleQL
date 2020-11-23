@@ -329,6 +329,7 @@ module.exports = async () => {
 
   // Add a plugin that enable communication with stripe
   const stripe = await stripePlugin(app, {
+    adminKey: database.privateKey,
     customerTable: 'User',
     database: database.database,
     secretKey: 'sk_test_51HfViKKIGDSYwsauSDJubPHtmVntPrwkGE0ZCxyMROd7hpmHaPI5X6aPqC77ot06ZhHmJ5ofNje3pXiJXn44BFx500rwkO05Hi',

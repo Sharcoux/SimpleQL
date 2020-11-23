@@ -273,7 +273,7 @@ class StripeDriver extends Driver {
     const dependency = dependantTables[table]
     if (dependency && !where[dependency + 'Id']) return Promise.reject(`You need to specify ${dependency} field in table ${table} to get data from Stripe API.`)
     try {
-      if (!search.length) return Promise.resolve([])
+      if (!search.length) return await Promise.resolve([])
       let results = await this._getAll({ table, where, keys: search })
       if (order) results.sort(sortFunction(order))
       // Drop the first elements if offset is provided

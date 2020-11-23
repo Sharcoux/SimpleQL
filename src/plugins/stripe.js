@@ -12,7 +12,7 @@ const { getQuery, dbQuery } = require('../utils/query')
 /** @type {Promise<import('../utils').Result>} */
 let stripeQueryStack = Promise.resolve({})
 /** @type {Promise<import('..').Query>} */
-dbQuery.stripe = stripeQueryStack.then(() => {})
+dbQuery.stripe = Promise.reject('Stripe not initialized')
 
 /** @type {import('stripe').Stripe & { [object: string]: import('stripe').Stripe['customers'] }} */
 let stripe
@@ -72,9 +72,11 @@ async function updateStripeIpList () {
 
 /**
  * @typedef {Object} StripePluginConfig
+ * @property {string} adminKey The id of admin user (this is the privateKey provided to the database. See [Database](../../docs/database.md))
  * @property {string} secretKey The Stripe secretKey
  * @property {string} customerTable The table where the users will be stored in the SimpleQL database
  * @property {string} webhookURL The URL were the Stripe webhooks should be sent
+ * @property {string=} proxyWebhookPath If using a proxy, the path the express app should actually be listening too
  * @property {string=} webhookSecret The secret key provided by stripe for [testing webhooks locally](https://stripe.com/docs/webhooks/test)
  * @property {string} database The name of the local database
  * @property {Object.<string, StripeListener>=} listeners The listeners to Stripe webhooks
@@ -93,13 +95,12 @@ async function createStripePlugin (app, config) {
 
   const {
     secretKey, customerTable = 'User', webhookURL = 'stripe-webhooks', listeners = {},
-    database, webhookSecret
+    database, webhookSecret, adminKey, proxyWebhookPath
   } = config
   stripe = getOptionalDep('stripe', 'StripePlugin')(secretKey)
 
   // Listen to Stripe webhooks
   const bodyParser = require('body-parser')
-  const url = new URL(webhookURL)
   // TODO : use only the hooks from the listeners list, and update the webhookEndpoint
   /** @type {import('stripe').Stripe.WebhookEndpointsResource} */
   let endpoint = /** @type {any} **/({})
@@ -125,7 +126,7 @@ async function createStripePlugin (app, config) {
     }
   }
   // Match the raw body to content type application/json
-  app.post(url.pathname, bodyParser.raw({ type: 'application/json' }), webhookListener(webhookSecret || endpoint.secret, listeners))
+  app.post(proxyWebhookPath || new URL(webhookURL).pathname, bodyParser.raw({ type: 'application/json' }), webhookListener(webhookSecret || endpoint.secret, listeners))
 
   // Create the plugin
   const { tables, tablesModel } = require('../drivers/stripe/tables')
@@ -152,11 +153,12 @@ async function createStripePlugin (app, config) {
       const stripeRequest = filterObject(request, stripeTableNames)
       const normalRequest = filterObject(request, normalTableNames)
       const authId = res.locals.authId
+      const isAdmin = authId === adminKey
       let stripeId = ''
       // We need to convert the User id into Customer id
-      if (authId && Object.keys(stripeRequest).length) {
+      if (authId && Object.keys(stripeRequest).length && !isAdmin) {
         const query = await getQuery(database)
-        const results = await query({ [customerTable]: { reservedId: authId, get: ['stripeId'] } })
+        const results = await query({ [customerTable]: { reservedId: authId, get: ['stripeId'] } }, { authId: adminKey, readOnly: true })
         const customer = results[customerTable][0]
         stripeId = customer && customer.stripeId
       }
@@ -164,21 +166,14 @@ async function createStripePlugin (app, config) {
       req.body = normalRequest
       // We handle the stripe part with our stripe request handler
       // We need to ensure that the previous request ends before the next one can go on
-      res.locals.results = await dbQuery.stripe.then(query => query(stripeRequest, { authId: stripeId, readOnly: false }))
+      res.locals.results = await dbQuery.stripe.then(query => query(stripeRequest, { authId: isAdmin ? secretKey : stripeId, readOnly: false }))
       next()
-    },
-    onRequest: {
-      [customerTable]: async (request) => {
-        // We want to retrieve the customerStripId on every request
-        if (request.get && request.get !== '*' && !request.stripeId && !request.get.includes('stripeId')) request.get.push('stripeId')
-      }
     },
     onCreation: {
       [customerTable]: async (created, { local, query }) => {
         // Try to read the user from Stripe if it already exists
-        const { data } = await stripe.customers.list()
-        const existingUser = data.find(user => user.email === created.email)
-        if (existingUser) await query({ [customerTable]: { reservedId: created.reservedId, set: { stripeId: existingUser.id } } }, { admin: true })
+        const { data } = await stripe.customers.list({ email: created.email })
+        if (data.length) await query({ [customerTable]: { reservedId: created.reservedId, set: { stripeId: data[0].id } } }, { admin: true })
         // Create the user otherwise
         else {
           if (!local.stripeCreated) local.stripeCreated = []
@@ -187,7 +182,7 @@ async function createStripePlugin (app, config) {
       }
     },
     onDeletion: {
-      [customerTable]: async (deleted, { request, local }) => {
+      [customerTable]: async (deleted, { local }) => {
         if (!local.stripeDeleted) local.stripeDeleted = []
         const unreadable = deleted.find(user => !user.stripeId)
         if (unreadable) {
@@ -224,7 +219,7 @@ async function createStripePlugin (app, config) {
  * @throws Throws an error if the config is wrong
  */
 function checkPluginConfig (config) {
-  check(stripeModel, config)
+  check(stripeModel, config, 'StripePluginConfig for Stripe Plugin')
   if (config.listeners) {
     const listeners = config.listeners
     const unknownHook = Object.keys(listeners).find(key => !stripeEvents.includes(key))
