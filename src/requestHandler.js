@@ -446,7 +446,8 @@ class TableResolver {
         return Promise.resolve()
       }
       const foreignTable = /** @type {import('./utils').TableValue} **/(this.table[key])
-      const results = await this.applyInTable(this.request[key], foreignTable.tableName)
+      let results = await this.applyInTable(this.request[key], foreignTable.tableName)
+      results = results.filter(result => result.reservedId)
       if (results.length === 0) {
         if (this.request[key].required) { return Promise.reject({
           name: NOT_FOUND,

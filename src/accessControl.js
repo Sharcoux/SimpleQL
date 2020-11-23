@@ -196,7 +196,6 @@ async function checkInTable ({ field, tables, tableName, authId, object, request
     return isValid(obj) ? Promise.resolve() : Promise.reject(`${ruleName}(${field}) rule: ${authId} could not be found in ${field} of ${JSON.stringify(request)} in ${tableName}.`)
   } else if (tables[tableName][field]) {
     // We check if the current object contains a property with the field name, and if the value is valid
-    console.log(object, field)
     let result = object
     if (object[field] === undefined) {
       const results = await query({
@@ -206,7 +205,6 @@ async function checkInTable ({ field, tables, tableName, authId, object, request
         }
       }, { admin: true, readOnly: true })
       result = results[tableName][0]
-      console.log(result, field)
     }
     if (!isValid(result[field])) return Promise.reject(`${ruleName}(${field}) rule: ${authId} not ${field} of ${JSON.stringify(result)} in ${tableName}.`)
     return Promise.resolve()
