@@ -452,7 +452,9 @@ async function createDatabase ({ database = 'simpleql', charset = 'utf8', create
           * use a non root user,
           * or run:
               sudo mysql
-              ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'password'`)
+              ALTER USER '${parameters.user}'@'localhost' IDENTIFIED WITH mysql_native_password BY '${parameters.password}'
+              For MariaDB, use instead:
+              ALTER USER '${parameters.user}'@'localhost' IDENTIFIED VIA mysql_native_password USING '${parameters.password}'`)
         } else return Promise.reject(err)
       })
       // Create the database
