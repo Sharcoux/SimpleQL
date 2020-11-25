@@ -11,8 +11,6 @@ const plugin = require('../drivers/stripe/plugin')
 const { getQuery, dbQuery } = require('../utils/query')
 /** @type {Promise<import('../utils').Result>} */
 let stripeQueryStack = Promise.resolve({})
-/** @type {Promise<import('..').Query>} */
-dbQuery.stripe = Promise.reject('Stripe not initialized')
 
 /** @type {import('stripe').Stripe & { [object: string]: import('stripe').Stripe['customers'] }} */
 let stripe
@@ -133,6 +131,7 @@ async function createStripePlugin (app, config) {
   const rules = require('../drivers/stripe/rules')
   const driver = require('../drivers/stripe')({ password: secretKey })
   const stripeRequestHandler = createRequestHandler({ tables, rules, tablesModel, plugins: [plugin], driver, privateKey: secretKey })
+  /** @type {Promise<import('..').Query>} */
   dbQuery.stripe = Promise.resolve((req, params = { authId: secretKey, readOnly: false }) => (stripeQueryStack = stripeQueryStack.catch(() => {}).then(() => stripeRequestHandler(req, params))))
   let normalTableNames = []
   const stripeTableNames = Object.keys(tables)
