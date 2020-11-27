@@ -257,7 +257,7 @@ class MysqlDriver extends Driver {
       if (length) query += `(${length})`
       if (unsigned) query += ' UNSIGNED'
       if (notNull || defaultValue === uuid) query += ' NOT NULL'
-      if (defaultValue === now) query += ' DEFAULT CURRENT_TIMESTAMP'
+      if (defaultValue === now) query += ` DEFAULT CURRENT_${type === 'date' ? 'DATE' : 'TIMESTAMP'}`
       else if (defaultValue && defaultValue !== uuid) query += ` DEFAULT ${this._escapeValue(table, name, defaultValue)}`
       if (autoIncrement) query += ' AUTO_INCREMENT'
       return query
