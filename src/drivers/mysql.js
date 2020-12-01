@@ -126,6 +126,8 @@ class MysqlDriver extends Driver {
     if (offset) query += ` OFFSET ${es(offset)}`
     return this.query(query).catch(errorHandler(table, 'get')).then(results => {
       log('database result', JSON.stringify(results))
+      // FIXME / HACK: We need to parse json values as mysql driver stringify it
+      search.forEach(key => this.json.includes(table + '.' + key) && results.forEach(result => (result[key] = JSON.parse(result[key]))))
       return Array.isArray(results) ? results : [results]
     })
   }
