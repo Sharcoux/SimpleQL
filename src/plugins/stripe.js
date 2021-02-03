@@ -194,7 +194,7 @@ async function createStripePlugin (app, config) {
       if (local.stripeCreated) {
         await Promise.all(local.stripeCreated.map(async created => {
         // Create the user in Stripe database and update the local database
-          const customerKeys = ['email', 'phone', 'address', 'name', 'description', 'metadata']
+          const customerKeys = ['email', 'name', 'description', 'metadata']
           const stripeCustomer = filterObject(created, customerKeys)
           // TODO : Check if a user already exists in stripe with this email?
           const { id: stripeId } = await stripe.customers.create(stripeCustomer)
