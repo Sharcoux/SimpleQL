@@ -130,9 +130,9 @@ async function createStripePlugin (app, config) {
   const { tables, tablesModel } = require('../drivers/stripe/tables')
   const rules = require('../drivers/stripe/rules')
   const driver = require('../drivers/stripe')({ password: secretKey })
-  const stripeRequestHandler = createRequestHandler({ tables, rules, tablesModel, plugins: [plugin], driver, privateKey: secretKey })
+  const stripeRequestHandler = createRequestHandler({ tables, rules, tablesModel, plugins: [plugin], driver, privateKey: adminKey })
   /** @type {Promise<import('..').Query>} */
-  dbQuery.stripe = Promise.resolve((req, params = { authId: secretKey, readOnly: false }) => (stripeQueryStack = stripeQueryStack.catch(() => {}).then(() => stripeRequestHandler(req, params))))
+  dbQuery.stripe = Promise.resolve((req, params = { authId: adminKey, readOnly: false }) => (stripeQueryStack = stripeQueryStack.catch(() => {}).then(() => stripeRequestHandler(req, params))))
   let normalTableNames = []
   const stripeTableNames = Object.keys(tables)
   return {
