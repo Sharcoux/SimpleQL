@@ -889,6 +889,7 @@ class RequestChecker {
     switch (type) {
       case 'string':
       case 'varchar':
+      case 'time':
       case 'text':
         return Object(value) instanceof String
       case 'char':
