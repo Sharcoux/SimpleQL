@@ -2,6 +2,7 @@
 
 /** Custom type checking system to detect any error coming from a user and provide the most possible accurate error message */
 const { stringify, toType } = require('./')
+const { dbColumn } = require('./types')
 
 /**
  * Check that the data matches the model
@@ -60,6 +61,24 @@ function checkType (model, data) {
 }
 
 /**
+ * Check the type of the data provided to the plugin
+ * @param {string} field The column name in the table
+ * @param {import('../utils').FormattedTableValue} table The table object data
+ * @param {string} expectedType The expected type for this column
+ * @param {number} minSize The minimum size for this column
+ * @param {string} tableName The table name
+ * @throws Throws an error if the field type doesn't match the expected type
+ * @returns {true}
+ */
+function checkColumn (field, table, expectedType, minSize, tableName) {
+  const data = table[field]
+  if (!data || data.type !== expectedType) throw new Error(`${tableName} should contain a field ${field} of type ${expectedType}, but we received: ${data && data.type}`)
+  check(dbColumn, data, `column ${field} in table ${table}`)
+  if (!data.length || parseInt(data.length + '', 10) < minSize) throw new Error(`${data} in ${tableName} should have a length of a at least ${minSize}`)
+  return true
+}
+
+/**
  * Retrieve the type of the provided value
  * @param {any} data The value to analyse
  * @returns {import('./types').TypeValue}
@@ -91,7 +110,7 @@ function generateError (expected, received, path, required) {
 }
 
 /**
- * Check
+ * Check that a model matchs the data provided
  * @param {import('./types').Model} model
  * @param {any} data
  * @param {string} description A description of the object we are controlling
@@ -127,4 +146,7 @@ function formatModel (model) {
   }
 }
 
-module.exports = check
+module.exports = {
+  check,
+  checkColumn
+}

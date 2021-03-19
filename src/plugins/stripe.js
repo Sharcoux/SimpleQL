@@ -1,7 +1,7 @@
 // @ts-check
 
 const { getOptionalDep, filterObject } = require('../utils')
-const check = require('../utils/type-checking')
+const { check, checkColumn } = require('../utils/type-checking')
 const { stripe: stripeModel } = require('../utils/types')
 const URL = require('url').URL
 const https = require('https')
@@ -13,6 +13,7 @@ const customerKeys = ['email', 'name', 'description', 'metadata']
 
 /** @type {Promise<import('../utils').Result>} */
 let stripeQueryStack = Promise.resolve({})
+const express = require('express')
 
 /** @type {import('stripe').Stripe & { [object: string]: import('stripe').Stripe['customers'] }} */
 let stripe
@@ -99,8 +100,6 @@ async function createStripePlugin (app, config) {
   } = config
   stripe = getOptionalDep('stripe', 'StripePlugin')(secretKey)
 
-  // Listen to Stripe webhooks
-  const bodyParser = require('body-parser')
   // TODO : use only the hooks from the listeners list, and update the webhookEndpoint
   /** @type {import('stripe').Stripe.WebhookEndpoint} */
   let endpoint = /** @type {any} **/({})
@@ -126,7 +125,7 @@ async function createStripePlugin (app, config) {
     }
   }
   // Match the raw body to content type application/json
-  app.post(proxyWebhookPath || new URL(webhookURL).pathname, bodyParser.raw({ type: 'application/json' }), webhookListener(webhookSecret || endpoint.secret, listeners))
+  app.post(proxyWebhookPath || new URL(webhookURL).pathname, express.raw({ type: 'application/json' }), webhookListener(webhookSecret || endpoint.secret, listeners))
 
   // Create the plugin
   const { tables, tablesModel } = require('../drivers/stripe/tables')
@@ -143,10 +142,11 @@ async function createStripePlugin (app, config) {
       const duplicateTable = normalTableNames.find(name => stripeTableNames.includes(name))
       if (duplicateTable) return Promise.reject(`Table ${duplicateTable} is a Stripe table. You must rename it to prevent conflicts.`)
       if (!tables[customerTable]) return Promise.reject(`To use the Stripe plugin, you need a table for your users. You provided ${customerTable} in the config, but there is no such table.`)
-      const customerStripeId = /** @type {import('../utils').Column} */(tables[customerTable].stripeId)
-      if (!customerStripeId) return Promise.reject(`To use the Stripe plugin, you need a column to store the stripeId of your customers in your table ${customerTable}. The column 'stripeId' needs to be defined in your table ${customerTable}.`)
-      if (customerStripeId.type !== 'string') return Promise.reject(`To use the Stripe plugin, you need a column 'stripeId' of type string in ${customerTable}, but it is of type ${customerStripeId.type}.`)
-      if (customerStripeId.length < 40) return Promise.reject(`To use the Stripe plugin, you need a column 'stripeId' of length at least 40, but you specified ${customerStripeId.length}.`)
+      try {
+        checkColumn('stripeId', /** @type {import('../utils').FormattedTableValue} */(tables[customerTable]), 'string', 40, customerTable)
+      } catch (err) {
+        throw new Error('To use the Stripe plugin, you must fix the following issue.\n' + err.message)
+      }
     },
     middleware: async (req, res, next) => {
       // We need to split the part of the request relative to Stripe from the rest

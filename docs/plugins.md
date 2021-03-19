@@ -185,6 +185,8 @@ const onSuccess = (results, {request, query, local, isAdmin }) => Promise.resolv
 
 This callback is called when the whole request will fail and the changes made to the database will be rolled back. It will receive the [onEvent parameters](#onevent-parameters) as second parameter.
 
+The changes to the database are already reverted when this is being called.
+
 ```javascript
 const onError = (error, {request, query, local, isAdmin}) => Promise.resolve()
 ```
@@ -205,6 +207,8 @@ The onEvent parameter consist of an object containing the following properties
  * **isAdmin** : A boolean indicating if the current request is being executed as an administrator.
  * **query** : A function that you can use to make a SimpleQL query to the database.
  * **local** : The current request local variables (like authId). You can read them or edit them directly through this object.
+ * **onSuccess** : You can provide this function a callback that will be called only once the full request succeeds for all tables
+ * **onError** : You can provide this function a callback that will be called only if the request failed. The changes to the database are already reverted when this is being called. Those callbacks are called before the onError function of any plugin is being called.
 
 ### parent
 

@@ -5,7 +5,7 @@ const errors = require('./errors')
 const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, PAYLOAD_TOO_LARGE, DATABASE_ERROR, FORBIDDEN, TOO_MANY_REQUESTS, UNAUTHORIZED, WRONG_PASSWORD, ACCESS_DENIED, CONFLICT, REQUIRED } = errors
 const checkParameters = require('./checks')
 const accessControl = require('./accessControl')
-const bodyParser = require('body-parser')
+const express = require('express')
 const log = require('./utils/logger')
 const plugins = require('./plugins')
 const { stringify, modelFactory, now, uuid } = require('./utils')
@@ -99,9 +99,9 @@ async function createServer ({ tables = {}, database, rules = {}, plugins = [], 
     const requestHandler = await createRequestHandler({ tables: preparedTables, tablesModel, driver, rules: preparedRules, privateKey: database.privateKey, plugins })
     log('info', `${databaseName} database ready to be used!`)
     // parse application/x-www-form-urlencoded
-    app.use(root, bodyParser.urlencoded({ extended: false, limit: '1mb' }))
+    app.use(root, express.urlencoded({ extended: false, limit: '1mb' }))
     // parse application/json
-    app.use(root, bodyParser.json({ limit: sizeLimit }))
+    app.use(root, express.json({ limit: sizeLimit }))
     // Limit amount of requests handled
     if (requestPerMinute) {
       const apiLimiter = rateLimit({

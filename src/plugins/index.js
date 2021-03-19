@@ -22,6 +22,12 @@ const stripePlugin = require('./stripe')
  */
 
 /**
+ * @typedef {Object} OnEventTableParam
+ * @property {(callback: (results: import('../utils').Result) => void) => void} onSuccess Provide this function a callback that will be called if the request succeeds
+ * @property {(callback: () => void) => void} onError Provide this function a callback that will be called if the request fails
+ */
+
+/**
  * A function that will make sure that the plugin is correctly configured.
  * @callback Prerequisite
  * @param {import('../utils').FormattedTablesDeclaration} tables The object containing the declaration of the tables
@@ -42,16 +48,16 @@ const stripePlugin = require('./stripe')
  * @property {Object.<string, import('../utils').Element[]>} removed An object containing the list of objects being removed to each field
 **/
 
-/** @typedef {Object.<string, (request: import('../utils').Request, onEvent: OnEventParam) => Promise<void>>} onRequest **/
-/** @typedef {Object.<string, (createdObject: import('../utils').Element, onEvent: OnEventParam) => Promise<void>>} onCreation **/
-/** @typedef {Object.<string, (deletedObjectsArray: import('../utils').Element[], onEvent: OnEventParam) => Promise<void>>} onDeletion **/
-/** @typedef {Object.<string, (results: import('../utils').Element[], onEvent: OnEventParam) => Promise<void>>} onProcessing **/
-/** @typedef {Object.<string, (results: import('../utils').Element[], onEvent: OnEventParam) => Promise<void>>} onResult **/
-/** @typedef {Object.<string, (results: { [table: string]: import('../utils').Element[] }, onEvent: OnEventParam) => Promise<void>>} onResponse **/
+/** @typedef {Object.<string, (request: import('../utils').Request, onEvent: OnEventParam & OnEventTableParam) => Promise<void>>} onRequest **/
+/** @typedef {Object.<string, (createdObject: import('../utils').Element, onEvent: OnEventParam & OnEventTableParam) => Promise<void>>} onCreation **/
+/** @typedef {Object.<string, (deletedObjectsArray: import('../utils').Element[], onEvent: OnEventParam & OnEventTableParam) => Promise<void>>} onDeletion **/
+/** @typedef {Object.<string, (results: import('../utils').Element[], onEvent: OnEventParam & OnEventTableParam) => Promise<void>>} onProcessing **/
+/** @typedef {Object.<string, (results: import('../utils').Element[], onEvent: OnEventParam & OnEventTableParam) => Promise<void>>} onResult **/
+/** @typedef {Object.<string, (results: { [table: string]: import('../utils').Element[] }, onEvent: OnEventParam & OnEventTableParam) => Promise<void>>} onResponse **/
 /** @typedef {(results: import('../utils').Result, onEvent: OnEventParam) => Promise<void>} onSuccess **/
 /** @typedef {(error: import('../errors').Error, onEvent: OnEventParam) => Promise<void>} onError **/
-/** @typedef {Object.<string, (results: UpdateResults, onEvent: OnEventParam) => Promise<void>>} onUpdate **/
-/** @typedef {Object.<string, (results: ListUpdateResults, onEvent: OnEventParam) => Promise<void>>} onListUpdate **/
+/** @typedef {Object.<string, (results: UpdateResults, onEvent: OnEventParam & OnEventTableParam) => Promise<void>>} onUpdate **/
+/** @typedef {Object.<string, (results: ListUpdateResults, onEvent: OnEventParam & OnEventTableParam) => Promise<void>>} onListUpdate **/
 
 /**
  * @typedef {Object} Plugin

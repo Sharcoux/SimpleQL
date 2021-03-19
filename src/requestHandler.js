@@ -85,6 +85,8 @@ class RequestResolver {
     this.tables = tables
     this.tablesModel = tablesModel
     this.locals = locals
+    this.onSuccess = /** @type {((results: import('./utils').Result) => void)[]} **/([])
+    this.onError = /** @type {(() => void)[]} **/([])
     // We cache the requests made into the database
     this.cache = new Cache()
     this.request = request
@@ -106,7 +108,9 @@ class RequestResolver {
       setInTransaction(true)
       // We resolve the request in each table separately
       const results = await this.resolve(this.request, this.locals)
-      // We let the plugins know that the request will be committed and terminate successfully
+      // We call all the registered pending callback of the success
+      this.onSuccess.forEach(callback => callback(results))
+      // We let the plugins know that the request will be committed and terminated successfully
       await sequence(this.plugins.map(plugin => plugin.onSuccess).filter(s => s).map(onSuccess => () => onSuccess(results, { request: this.request, query: this.query, local: this.locals, isAdmin: this.locals.authId === this.privateKey })))
       // We terminate the request and commit all the changes made to the database
       await this.driver.commit()
@@ -116,6 +120,8 @@ class RequestResolver {
       // We terminate the request and rollback all the changes made to the database
       await this.driver.rollback().catch(err => console.error(err)) // We hav to catch any error happening in the rollback
       setInTransaction(false)
+      // We call all the registered pending callback of the failure
+      this.onError.forEach(callback => callback())
       // We let the plugins know that the request failed and the changes will be discarded
       await sequence(this.plugins.map(plugin => plugin.onError).filter(e => e).map(onError => () => onError(err, { request: this.request, query: this.query, local: this.locals, isAdmin: this.locals.authId === this.privateKey })))
       // If the plugins didn't generate a new error, we throw the original error event.
@@ -127,7 +133,7 @@ class RequestResolver {
    * Function needed to query the database from rules or plugins.
    * Function provided to execute SimpleQL requests into the database, potentially with admin rights
    * @param {import('./utils').Request} request The request to execute in the database
-   * @param {import('./utils').RequestOptions} options The request options
+   * @param {import('./utils').RequestOptions} options The request options. Default is { authId: locals.authId, readOnly: false }
    * @return {Promise<import('./utils').Result>} The result of the request
    **/
   async query (request, { readOnly, admin }) {
@@ -256,11 +262,13 @@ class TableResolver {
       else {
         // retrieve the objects from other tables
         await this.resolveObjects()
-        let results = null
+        let results = /** @type {import('./utils').Element[]} */([])
         // Insert elements inside the database if request.create is set
         if (this.request.create) results = await this.create()
         // Retrieve data from the database
         else results = await this.get()
+        // retrieve the objects from other tables
+        results = await this.resolveObjects(results)
         // Retrieve the objects associated through association tables
         results = await this.resolveChildrenArrays(results)
         // In read only mode, skip the next steps
@@ -436,20 +444,31 @@ class TableResolver {
   }
 
   /**
-   * We will now read the data of the objects we previously mapped to the results
-   * @returns {Promise<void>} The updated results
+   * Resolve the request parts within the other Object tables and add the results to the cache
+   * @param {string} key The key of the foreign table
+   * @return {Promise<import('./utils').Element[]>} The result of the foreign request
+   */
+  async resolveObject (key) {
+    // If we are looking for null values, no need to query the foreign table.
+    if (!this.request[key]) {
+      this.request[key] = null
+      return Promise.resolve([])
+    }
+    const foreignTable = /** @type {import('./utils').TableValue} **/(this.table[key])
+    const results = (await this.applyInTable(this.request[key], foreignTable.tableName))
+      .filter(result => result.reservedId)
+    results.forEach(result => this.cache.addCache(foreignTable.tableName, result))
+    return results
+  }
+
+  /**
+   * Resolve the request parts within the other Object tables and attach the result ids to the request
+   * @return {Promise<void>}
    */
   async resolveObjects () {
     log('resolution part title', 'resolveObjects')
     await sequence(this.objects.map(key => async () => {
-      // If we are looking for null values, no need to query the foreign table.
-      if (!this.request[key]) {
-        this.request[key] = null
-        return Promise.resolve()
-      }
-      const foreignTable = /** @type {import('./utils').TableValue} **/(this.table[key])
-      let results = await this.applyInTable(this.request[key], foreignTable.tableName)
-      results = results.filter(result => result.reservedId)
+      const results = await this.resolveObject(key)
       if (results.length === 0) {
         if (this.request[key].required) { return Promise.reject({
           name: NOT_FOUND,
@@ -457,10 +476,36 @@ class TableResolver {
         }) }
         this.request[key + 'Id'] = []
       } else if (results.length > 1) {
-        // return Promise.reject({
-        //   name: DATABASE_ERROR,
-        //   message: `We found more than one object for key ${key} with the constraint ${this.request[key]} in table ${foreignTable.tableName}`
-        // })
+      // return Promise.reject({
+      //   name: DATABASE_ERROR,
+      //   message: `We found more than one object for key ${key} with the constraint ${this.request[key]} in table ${foreignTable.tableName}`
+      // })
+        this.request[key + 'Id'] = results.map(res => res.reservedId)
+      } else {
+        this.request[key + 'Id'] = results[0].reservedId
+      }
+    }))
+  }
+
+  /**
+   * Resolve the request parts within the other Object tables and attach the result ids to the request
+   * @param {import('./utils').Element[]} results The results of the get request.
+   */
+  async addForeignObjectsToResults (results) {
+    await sequence(this.objects.map(key => async () => {
+      const foreignTable = /** @type {import('./utils').TableValue} **/(this.table[key])
+      const results = (await this.applyInTable(this.request[key], foreignTable.tableName)).filter(result => result.reservedId)
+      if (results.length === 0) {
+        if (this.request[key].required) { return Promise.reject({
+          name: NOT_FOUND,
+          message: `Nothing found with these constraints : ${this.tableName}->${key}->${JSON.stringify(this.request[key])}`
+        }) }
+        this.request[key + 'Id'] = []
+      } else if (results.length > 1) {
+      // return Promise.reject({
+      //   name: DATABASE_ERROR,
+      //   message: `We found more than one object for key ${key} with the constraint ${this.request[key]} in table ${foreignTable.tableName}`
+      // })
         this.request[key + 'Id'] = results.map(res => res.reservedId)
         results.map(result => this.cache.addCache(foreignTable.tableName, result))
       } else {
@@ -681,6 +726,7 @@ class TableResolver {
     const ruleSet = this.rules[this.tableName]
 
     await sequence(results.map(result => async () => {
+      /** @type {import('./accessControl').RuleParams} **/
       const ruleData = { authId: this.local.authId, request: { ...this.request, parent: this.parentRequest }, object: result, query: this.requestResolver.query }
 
       // Read access
@@ -792,13 +838,25 @@ class TableResolver {
    */
   async pluginCall (data, event) {
     // Function provided to edit local request parameters (authId, readOnly) during the request
+    const success = this.requestResolver.onSuccess
+    const error = this.requestResolver.onError
+    /**
+     * The provided callback will be called on request succeeds
+     * @param {(results: import('./utils').Result) => void} callback The callback function
+     */
+    function onSuccess (callback) { success.push(callback) }
+    /**
+     * The provided callback will be called if the request fails
+     * @param {() => void} callback The callback function
+     */
+    function onError (callback) { error.push(callback) }
     log('resolution part title', event, this.tableName)
     return sequence(this.requestResolver.plugins
     // Read the callback for the event in this table for each plugin
       .map(plugin => plugin[event] && plugin[event][this.tableName])
     // Keep only the plugins that have such a callback
       .filter(eventOnTable => eventOnTable)
-      .map(callback => () => callback(data, { request: this.request, parent: this.parentRequest, query: this.requestResolver.query, local: this.requestResolver.locals, isAdmin: this.local.authId === this.requestResolver.privateKey }))
+      .map(callback => () => callback(data, { onError, onSuccess, request: this.request, parent: this.parentRequest, query: this.requestResolver.query, local: this.requestResolver.locals, isAdmin: this.local.authId === this.requestResolver.privateKey }))
     )
   }
 

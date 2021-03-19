@@ -2,7 +2,7 @@
 // @ts-check
 
 /** This file contains functions to check the validity of the parameters provided to simple-ql */
-const check = require('./utils/type-checking')
+const { check } = require('./utils/type-checking')
 const { dbColumn, database } = require('./utils/types')
 const { stringify, classifyData, reservedKeys, toType } = require('./utils')
 

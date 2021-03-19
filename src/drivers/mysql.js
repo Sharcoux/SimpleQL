@@ -364,7 +364,7 @@ class MysqlDriver extends Driver {
           return '(' + (/** @type {import('./template').Operator[]} **/(Object.keys(value))).map(k => {
             if (!operators.includes(k)) throw new Error(`${k} is not a valid constraint for key ${key} in table ${table}`)
             if (!['not', '!', '='].includes(operator)) throw new Error(`${k} connot be combined with operator ${operator} in key ${key} in table ${table}`)
-            return writeCondition(value[k], k)
+            return writeCondition(value[k], /** @type {import('./template').Operator} **/(k))
           }).join(' AND ') + ')'
         }
         else if (value === undefined) throw new Error(`The value for ${key} was undefined in table ${table}.`)

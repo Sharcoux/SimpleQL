@@ -2,7 +2,7 @@
 
 /** Security Plugin. Check the documentation **/
 const { security: securityModel } = require('../utils/types')
-const check = require('../utils/type-checking')
+const { check } = require('../utils/type-checking')
 const log = require('../utils/logger')
 const { getOptionalDep } = require('../utils')
 const fs = require('fs')

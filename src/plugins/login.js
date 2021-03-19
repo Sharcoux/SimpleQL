@@ -4,8 +4,8 @@
 const { BAD_REQUEST, NOT_FOUND, WRONG_PASSWORD } = require('../errors')
 const fs = require('fs')
 const crypto = require('crypto')
-const check = require('../utils/type-checking')
-const { login: loginModel, dbColumn } = require('../utils/types')
+const { check, checkColumn } = require('../utils/type-checking')
+const { login: loginModel } = require('../utils/types')
 const logger = require('../utils/logger')
 const { getOptionalDep, filterObject } = require('../utils')
 
@@ -39,24 +39,6 @@ try {
 }
 
 const { publicKey, privateKey } = keyPair
-
-/**
- * Check the type of the data provided to the plugin
- * @param {string} field The column name in the table
- * @param {import('../utils').FormattedTableValue} table The table object data
- * @param {string} expectedType The expected type for this column
- * @param {number} minSize The minimum size for this column
- * @param {string} tableName The table name
- * @throws Throws an error if the field type doesn't match the expected type
- * @returns {true}
- */
-function checkType (field, table, expectedType, minSize, tableName) {
-  const data = table[field]
-  if (!data || data.type !== expectedType) throw new Error(`${tableName} should contain a field ${field} of type ${expectedType}, but we received: ${data && data.type}`)
-  check(dbColumn, data, `column ${field} in table ${table}`)
-  if (!data.length || parseInt(data.length + '', 10) < minSize) throw new Error(`${data} in ${tableName} should have a length of a at least ${minSize}`)
-  return true
-}
 
 /**
  * Ensure that the data is of type string
@@ -202,11 +184,11 @@ function createLoginPlugin (config) {
       const table = /** @type {import('../utils').FormattedTableValue} */(tables[userTable])
       if (!table) return Promise.reject(`The table ${userTable} is not defined and is needed for loggin`)
       try {
-        checkType(login, table, 'string', 1, userTable)
-        checkType(password, table, 'binary', 64, userTable)
-        if (salt) checkType(salt, table, 'binary', 16, userTable)
-        if (firstname) checkType(firstname, table, 'string', 1, userTable)
-        if (lastname) checkType(lastname, table, 'string', 1, userTable)
+        checkColumn(login, table, 'string', 1, userTable)
+        checkColumn(password, table, 'binary', 64, userTable)
+        if (salt) checkColumn(salt, table, 'binary', 16, userTable)
+        if (firstname) checkColumn(firstname, table, 'string', 1, userTable)
+        if (lastname) checkColumn(lastname, table, 'string', 1, userTable)
       } catch (err) {
         return Promise.reject(err)
       }

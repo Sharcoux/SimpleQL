@@ -301,7 +301,7 @@ const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', 
  * @property {boolean=} admin Indicate if the request should be executed with admin rights
  */
 
-/** @typedef { { reservedId: string } & Object.<string, any> } Element */
+/** @typedef { { reservedId: string; created?: boolean; edited?: boolean; deleted?: boolean } & Object.<string, any> } Element */
 /** @typedef {{[table: string]: Element[]}} Result */
 
 /**
@@ -310,7 +310,7 @@ const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', 
 
 /**
  * @param {{}} tables The global object that will hold the tables
- * @returns {any} An object that can be destructurated
+ * @returns {TablesDeclaration} An object that can be destructurated
  */
 function modelFactory (tables) {
   return new Proxy(tables, { get: (target, name) => (target[name] = {}) })
