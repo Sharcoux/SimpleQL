@@ -9,6 +9,8 @@ const createRequestHandler = require('../requestHandler')
 const log = require('../utils/logger')
 const plugin = require('../drivers/stripe/plugin')
 const { getQuery, dbQuery } = require('../utils/query')
+const customerKeys = ['email', 'name', 'description', 'metadata']
+
 /** @type {Promise<import('../utils').Result>} */
 let stripeQueryStack = Promise.resolve({})
 
@@ -180,6 +182,19 @@ async function createStripePlugin (app, config) {
         }
       }
     },
+    onUpdate: {
+      [customerTable]: async ({ objects, newValues }, { query }) => {
+        // updates the stripe customer according with the changes on local customer
+        objects.forEach(async object => {
+          const toUpdate = filterObject(newValues, customerKeys)
+          // if the updated fields match the customerKeys
+          if (Object.keys(toUpdate).length > 0) {
+            const { [customerTable]: [customer] } = await query({ [customerTable]: { reservedId: object.reservedId, get: ['stripeId'] } }, { admin: true, readOnly: true })
+            customer && customer.stripeId && await stripe.customers.update(customer.stripeId, filterObject(newValues, customerKeys));
+          }
+        })
+      }
+    },
     onDeletion: {
       [customerTable]: async (deleted, { local }) => {
         if (!local.stripeDeleted) local.stripeDeleted = []
@@ -194,7 +209,6 @@ async function createStripePlugin (app, config) {
       if (local.stripeCreated) {
         await Promise.all(local.stripeCreated.map(async created => {
         // Create the user in Stripe database and update the local database
-          const customerKeys = ['email', 'name', 'description', 'metadata']
           const stripeCustomer = filterObject(created, customerKeys)
           // TODO : Check if a user already exists in stripe with this email?
           const { id: stripeId } = await stripe.customers.create(stripeCustomer)
