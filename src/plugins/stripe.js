@@ -183,15 +183,11 @@ async function createStripePlugin (app, config) {
       }
     },
     onUpdate: {
-      [customerTable]: async ({ objects, newValues }, { query }) => {
-        // updates the stripe customer according with the changes on local customer
-        objects.forEach(async object => {
+      [customerTable]: async ({ objects, newValues }, { local }) => {
+        local.stripeUpdated = objects.map(object => {
+          // filter the updated fields with the customerKeys
           const toUpdate = filterObject(newValues, customerKeys)
-          // if the updated fields match the customerKeys
-          if (Object.keys(toUpdate).length > 0) {
-            const { [customerTable]: [customer] } = await query({ [customerTable]: { reservedId: object.reservedId, get: ['stripeId'] } }, { admin: true, readOnly: true })
-            customer && customer.stripeId && await stripe.customers.update(customer.stripeId, filterObject(newValues, customerKeys));
-          }
+          return { object, toUpdate }
         })
       }
     },
@@ -222,6 +218,16 @@ async function createStripePlugin (app, config) {
       delete local.stripeCreated
       // Add the request results to the results
       Object.assign(results, local.results || {})
+
+      if (local.stripeUpdated) {
+        // updates the stripe customer according with the changes on local customer
+        local.stripeUpdated.forEach(async ({ object, toUpdate }) => {
+          if (Object.keys(toUpdate).length > 0) {
+            const { [customerTable]: [customer] } = await query({ [customerTable]: { reservedId: object.reservedId, get: ['stripeId'] } }, { admin: true, readOnly: true })
+            customer && customer.stripeId && await stripe.customers.update(customer.stripeId, toUpdate);
+          }
+        })
+      }
     }
   }
 }
