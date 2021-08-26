@@ -325,6 +325,10 @@ function createLoginPlugin (config) {
           }
           if (request.set && request.set[password]) {
             // Someone is trying to update password
+            if (!request[login]) { return Promise.reject({
+              name: BAD_REQUEST,
+              message: `You need to provide the ${login} to edit the ${password}`
+            }) }
             isString(password, request.set[password], userTable)
             return processRequestPassword(request.set, password, salt)
           }

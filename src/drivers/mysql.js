@@ -361,7 +361,7 @@ class MysqlDriver extends Driver {
         if (['not', '!'].includes(operator)) return 'NOT (' + writeCondition(value) + ')'
         if (Array.isArray(value)) return '(' + value.map(v => writeCondition(v, operator)).join(' OR ') + ')'
         else if (value instanceof Object) {
-          return '(' + Object.keys(value).map((/** @type {import('./template').Operator} **/k) => {
+          return '(' + (/** @type {import('./template').Operator[]} **/(Object.keys(value))).map(k => {
             if (!operators.includes(k)) throw new Error(`${k} is not a valid constraint for key ${key} in table ${table}`)
             if (!['not', '!', '='].includes(operator)) throw new Error(`${k} connot be combined with operator ${operator} in key ${key} in table ${table}`)
             return writeCondition(value[k], k)
