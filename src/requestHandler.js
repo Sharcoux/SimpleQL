@@ -126,7 +126,9 @@ class RequestResolver {
   /**
    * Function needed to query the database from rules or plugins.
    * Function provided to execute SimpleQL requests into the database, potentially with admin rights
-   * @type {import('./utils').QueryFunction}
+   * @param {import('./utils').Request} request The request to execute in the database
+   * @param {import('./utils').RequestOptions} options The request options
+   * @return {Promise<import('./utils').Result>} The result of the request
    **/
   async query (request, { readOnly, admin }) {
     return this.resolve(request, { authId: admin ? this.privateKey : this.locals.authId, readOnly })

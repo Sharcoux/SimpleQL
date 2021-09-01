@@ -31,7 +31,7 @@ const props = {
   Product: ['active', 'created', 'type', 'url', 'shippable', 'ids'],
   Plan: ['active', 'created', 'product'],
   Price: ['active', 'created', 'recurring', 'product', 'currency', 'lookup_keys', 'type'],
-  Subscription: ['collection_method', 'created', 'current_period_end', 'current_period_start', 'customer', 'plan', 'price', 'status'],
+  Subscription: ['collection_method', 'items', 'created', 'current_period_end', 'current_period_start', 'customer', 'plan', 'price', 'status'],
   SubscriptionItem: ['subscription'],
   SubscriptionSchedule: ['canceled_at', 'completed_at', 'created', 'customer', 'released_at', 'scheduled'],
   Account: ['created'],
@@ -141,6 +141,24 @@ function helperGetter (stripe) {
   }
 
   /** @type {(table: string) => Helper} */
+  function subscriptionHelper () {
+    const table = 'Subscription'
+    return {
+      ...defaultHelper(table),
+      list: async (params, search) => {
+        if (search.includes('items')) {
+          const subscriptions = (await stripe.subscriptions.list(params.transfert, buildParameter(table, search, false, params))).data
+          return await Promise.all(subscriptions.map(async subs => {
+            const items = await stripe.subscriptionItems.list({ subscription: subs.id })
+            return { ...subs, items }
+          }))
+        }
+        else return (await stripe.subscriptions.list(buildParameter(table, search, false, params))).data
+      }
+    }
+  }
+
+  /** @type {(table: string) => Helper} */
   function undelatableHelper (table) {
     return {
       ...defaultHelper(table),
@@ -235,7 +253,7 @@ function helperGetter (stripe) {
       case 'Product': return defaultHelper(table)
       case 'Plan': return defaultHelper(table)
       case 'Price': return undelatableHelper(table)
-      case 'Subscription': return defaultHelper(table)
+      case 'Subscription': return subscriptionHelper()
       case 'SubscriptionItem': return defaultHelper(table)
       case 'SubscriptionSchedule': return undelatableHelper(table)
       case 'Account': return defaultHelper(table)

@@ -90,7 +90,7 @@ async function sequence (funcs) {
   const L = []
   const notFunction = funcs.find(f => !(f instanceof Function))
   if (notFunction) return Promise.reject(`sequence must receive an array of functions that return a promise, but received ${toType(notFunction)} instead.`)
-  return funcs.reduce((chaine, func) => chaine.then(func).then(result => L.push(result)), Promise.resolve()).then(() => L)
+  return funcs.reduce((chaine, func) => chaine.then(func).then(result => L.push(result)), /** @type Promise<any> **/(Promise.resolve())).then(() => L)
 }
 
 /**
@@ -305,7 +305,7 @@ const operators = ['not', 'like', 'gt', 'ge', 'lt', 'le', '<', '>', '<=', '>=', 
 /** @typedef {{[table: string]: Element[]}} Result */
 
 /**
- * @typedef {(request: import('../utils').Request, options: RequestOptions) => Promise<Result>} QueryFunction
+ * @typedef {(request: Request, options: RequestOptions) => Promise<Result>} QueryFunction
  */
 
 /**
