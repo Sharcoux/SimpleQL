@@ -142,7 +142,7 @@ function classifyData (object) {
  * @property {string[] | '*'=} get Retrieves the data from the specified column
  * @property {Object=} set Change the data in the keys of this object with the values of this object
  * @property {boolean=} create Insert an entry in this table
- * @property {boolean=} deled Remove an entry in this table
+ * @property {boolean=} delete Remove an entry in this table
  * @property {number=} limit Limit the results to this much
  * @property {number=} offset Ignore this much first results
  * @property {string[]=} order Order the results according to those columns. Preceed by '-' for descending order
@@ -153,7 +153,7 @@ function classifyData (object) {
  * @property {string[]=} get Retrieves the data from the specified column
  * @property {Object=} set Change the data in the keys of this object with the values of this object
  * @property {boolean=} create Insert an entry in this table
- * @property {boolean=} deled Remove an entry in this table
+ * @property {boolean=} delete Remove an entry in this table
  * @property {number=} limit Limit the results to this much
  * @property {number=} offset Ignore this much first results
  * @property {string[]=} order Order the results according to those columns. Preceed by '-' for descending order
