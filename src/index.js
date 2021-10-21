@@ -2,7 +2,7 @@
 
 const createDatabase = require('./database')
 const errors = require('./errors')
-const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, DATABASE_ERROR, FORBIDDEN, TOO_MANY_REQUESTS, UNAUTHORIZED, WRONG_PASSWORD, ACCESS_DENIED, CONFLICT, REQUIRED } = errors
+const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, PAYLOAD_TOO_LARGE, DATABASE_ERROR, FORBIDDEN, TOO_MANY_REQUESTS, UNAUTHORIZED, WRONG_PASSWORD, ACCESS_DENIED, CONFLICT, REQUIRED } = errors
 const checkParameters = require('./checks')
 const accessControl = require('./accessControl')
 const bodyParser = require('body-parser')
@@ -166,6 +166,10 @@ function defaultErrorHandler (err, _req, res, next) {
         break
       case NOT_FOUND:
         res.writeHead(404)
+        res.end(err.message)
+        break
+      case PAYLOAD_TOO_LARGE:
+        res.writeHead(413)
         res.end(err.message)
         break
       case CONFLICT:

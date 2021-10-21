@@ -1,7 +1,7 @@
 // @ts-check
 
 /** This file contains the Driver that will convert SimpleQL requests into MySQL queries **/
-const { WRONG_VALUE, CONFLICT, REQUIRED } = require('../errors')
+const { WRONG_VALUE, CONFLICT, REQUIRED, PAYLOAD_TOO_LARGE } = require('../errors')
 const Driver = require('./template')
 
 const { isPrimitive, operators, sequence, ensureCreation, getOptionalDep, now, uuid } = require('../utils')
@@ -404,7 +404,8 @@ function errorHandler (table, operation) {
   return error => {
     if (error.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' && error.sqlMessage.includes('Access denied')) {
       return Promise.reject({ name: WRONG_VALUE, message: `You are not allowed to access some data needed for your request ${operation} in table ${table}.` })
-    } else if (error.code === 'ER_DUP_ENTRY') {
+    }
+    else if (error.code === 'ER_DUP_ENTRY') {
       const message = error.sqlMessage.replace(`I_${table}_`, '')
       const [dup, ids, key, tables] = message.split('\'')
       const [tableNames, property] = tables.split('_').map(name => name.replace('Id', ''))
@@ -418,7 +419,15 @@ function errorHandler (table, operation) {
       else {
         return Promise.reject({ name: CONFLICT, message: `${dup}: Table ${tableName} received a second object with ${propertyName} ${ids} during ${operation} operation, whereas it was expected to be unique.` })
       }
-    } else if (error.code === 'ER_NO_DEFAULT_FOR_FIELD') return Promise.reject({ name: REQUIRED, message: `${error.sqlMessage}, was not specified in the request, and is required in table ${table} for ${operation} operation.` })
+    }
+    else if (error.code === 'ER_NO_DEFAULT_FOR_FIELD') { return Promise.reject({
+      name: REQUIRED,
+      message: `${error.sqlMessage}, was not specified in the request, and is required in table ${table} for ${operation} operation.`
+    }) }
+    else if (error.code === 'ER_DATA_TOO_LONG') { return Promise.reject({
+      name: PAYLOAD_TOO_LARGE,
+      message: `${error.sqlMessage}, It occured in ${table} table during ${operation} operation`
+    }) }
     else {
       console.error(error)
       return Promise.reject({ name: error.code, message: `${error.sqlMessage}. It occured in ${table} table during ${operation} operation` })
