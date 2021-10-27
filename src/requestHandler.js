@@ -114,7 +114,7 @@ class RequestResolver {
       return results
     } catch (err) {
       // We terminate the request and rollback all the changes made to the database
-      await this.driver.rollback()
+      await this.driver.rollback().catch(err => console.error(err)) // We hav to catch any error happening in the rollback
       setInTransaction(false)
       // We let the plugins know that the request failed and the changes will be discarded
       await sequence(this.plugins.map(plugin => plugin.onError).filter(e => e).map(onError => () => onError(err, { request: this.request, query: this.query, local: this.locals, isAdmin: this.locals.authId === this.privateKey })))
