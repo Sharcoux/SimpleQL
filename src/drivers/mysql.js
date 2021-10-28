@@ -90,23 +90,23 @@ class MysqlDriver extends Driver {
 
   async commit () {
     if (!this.inTransaction) return Promise.reject('You must start a transaction with `startTransaction()` before being able to commit it.')
-    return this.query('COMMIT').then(() => {
+    return this.query('COMMIT').finally(() => {
+      this.inTransaction = false
       this.connection.release()
       // TODO ensure that this affectation is legit
       // @ts-ignore
       this.connection = this.pool
-      this.inTransaction = false
     })
   }
 
   async rollback () {
     if (!this.inTransaction) return Promise.reject('You must start a transaction with `startTransaction()` before being able to roll it back.')
-    return this.query('ROLLBACK').then(() => {
+    return this.query('ROLLBACK').finally(() => {
+      this.inTransaction = false
       this.connection.release()
       // TODO ensure that this affectation is legit
       // @ts-ignore
       this.connection = this.pool
-      this.inTransaction = false
     })
   }
 
@@ -440,7 +440,7 @@ function errorHandler (table, operation) {
  * @param {import('../database').DatabaseConfig} mysqlParam Driver configuration
  * @returns {Promise<import('./template')>} Returns the driver to communicate with the database
  */
-async function createDatabase ({ database = 'simpleql', charset = 'utf8', create = false, unprotect = false, host = 'localhost', connectionLimit = 100, ...parameters }) {
+async function createDatabase ({ database = 'simpleql', charset = 'utf8mb4', create = false, unprotect = false, host = 'localhost', connectionLimit = 100, ...parameters }) {
   return Promise.resolve().then(() => {
     if (!create) return Promise.resolve()
     // Instantiate a connection to create the database
