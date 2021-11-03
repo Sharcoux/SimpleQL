@@ -444,7 +444,7 @@ async function createDatabase ({ database = 'simpleql', charset = 'utf8mb4', cre
   return Promise.resolve().then(() => {
     if (!create) return Promise.resolve()
     // Instantiate a connection to create the database
-    const pool = mysql.createPool({ ...parameters, connectionLimit, host })
+    const pool = mysql.createPool({ ...parameters, connectionLimit, host, charset })
     const driver = new MysqlDriver(pool)
     return driver.query(`SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${database}'`)
       .then(exists => exists.length && !unprotect && ensureCreation(database))
@@ -474,7 +474,7 @@ async function createDatabase ({ database = 'simpleql', charset = 'utf8mb4', cre
   })
     // Enter the database and returns the driver
     .then(() => {
-      const pool = mysql.createPool({ ...parameters, database, connectionLimit, host })
+      const pool = mysql.createPool({ ...parameters, database, connectionLimit, host, charset })
       return new MysqlDriver(pool)
     })
 }
