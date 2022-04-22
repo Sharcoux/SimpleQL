@@ -847,7 +847,7 @@ class RequestChecker {
     if (Array.isArray(value)) return value.every(v => this.isValue(v, key))
     // This is the way to create a AND condition
     if (value instanceof Object) return Object.keys(value).every(k => operators.includes(k) && this.isValue(value[k], key))
-    throw new Error(`Bad value ${value} provided for field ${key} in table ${this.tableName}. We expect null, a ${this.tablesModel[key].type}, an object, or an array of these types during request ${stringify(this.request)}.`)
+    throw new Error(`Bad value ${value} provided for field ${key} in table ${this.tableName}. We expect null, a ${this.table[key].type}, an object, or an array of these types during request ${stringify(this.request)}.`)
   }
 
   /**
