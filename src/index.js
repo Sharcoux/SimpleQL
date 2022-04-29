@@ -19,6 +19,9 @@ const { dbQuery, getQuery } = require('./utils/query')
 /** @typedef {import('./utils').TableDeclaration} Table */
 /** @typedef {import('./utils').TablesDeclaration} Tables */
 /** @typedef {import('./database').DatabaseConfig} Database */
+/** @typedef {import('./utils').QueryFunction} QueryFunction */
+/** @typedef {Object.<string, any> & import('./plugins').LocalParam} Local **/
+/** @typedef {import('./plugins').OnEventParam} OnEventParam **/
 
 /**
  * @callback Query
