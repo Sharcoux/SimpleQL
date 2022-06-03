@@ -102,7 +102,7 @@ async function createStripePlugin (app, config) {
   // Listen to Stripe webhooks
   const bodyParser = require('body-parser')
   // TODO : use only the hooks from the listeners list, and update the webhookEndpoint
-  /** @type {import('stripe').Stripe.WebhookEndpointsResource} */
+  /** @type {import('stripe').Stripe.WebhookEndpoint} */
   let endpoint = /** @type {any} **/({})
   if (!webhookSecret) {
     // If an endpoint already exists, we need to delete it (otherwise we can't retrieve the webhook secret)
@@ -119,7 +119,7 @@ async function createStripePlugin (app, config) {
         - npx stripe listen --forward-to ${webhookURL}
         - copy the provided webhook secret key into stripe plugins's config: 'config.webhookSecret'.`)
         log('warning', 'The script will continue without the webhooks')
-        endpoint = {}
+        endpoint = /** @type {any} **/({})
       } else {
         return Promise.reject(error)
       }
@@ -224,7 +224,7 @@ async function createStripePlugin (app, config) {
         local.stripeUpdated.forEach(async ({ object, toUpdate }) => {
           if (Object.keys(toUpdate).length > 0) {
             const { [customerTable]: [customer] } = await query({ [customerTable]: { reservedId: object.reservedId, get: ['stripeId'] } }, { admin: true, readOnly: true })
-            customer && customer.stripeId && await stripe.customers.update(customer.stripeId, toUpdate);
+            customer && customer.stripeId && await stripe.customers.update(customer.stripeId, toUpdate)
           }
         })
       }
@@ -291,6 +291,7 @@ const stripeEvents = [
   'application_fee.refunded',
   'application_fee.refund.updated',
   'balance.available',
+  'billing_portal.session.created',
   'capability.updated',
   'charge.captured',
   'charge.expired',
@@ -308,6 +309,7 @@ const stripeEvents = [
   'checkout.session.async_payment_failed',
   'checkout.session.async_payment_succeeded',
   'checkout.session.completed',
+  'checkout.session.expired',
   'coupon.created',
   'coupon.deleted',
   'coupon.updated',
