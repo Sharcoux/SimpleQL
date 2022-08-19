@@ -85,7 +85,7 @@ function getObjectInRequest (request, field) {
   if (!field) return request
   if (!request) return undefined
   const fields = field.split('.')
-  const first = fields.shift()
+  const first = /** @type {string} **/(fields.shift())
   if (first === 'parent' || first === '..') return getObjectInRequest(request.parent, fields.join('.'))
   return getObjectInRequest(request[first], fields.join('.'))
 }
@@ -100,7 +100,7 @@ function getTargetObject (object, field) {
   if (!field) return object
   if (!object) return undefined
   const fields = field.split('.')
-  const first = fields.shift()
+  const first = /** @type {string} **/(fields.shift())
   return getTargetObject(object[first], fields.join('.'))
 }
 
@@ -157,13 +157,34 @@ function count (field, { amount, min, max } = {}) {
   const isValid = elt => {
     const value = Array.isArray(elt) ? elt.length : Number.parseInt(elt, 10)
     if (amount) return value === amount
-    else if (min) {
-      if (max) return value >= min && value <= max
-      else return value >= min
-    } else return value <= max
+    else if (min !== undefined && max !== undefined) return value >= min && value <= max
+    else if (min !== undefined) return value >= min
+    else if (max !== undefined) return value <= max
+    else return true
   }
   return ({ tables, tableName }) => async ({ authId, object, request, requestFlag, query }) => {
     return checkInTable({ field, tables, tableName, authId, object, request, requestFlag, query, ruleName: 'count', isValid })
+  }
+}
+
+/**
+ * Valid only if the field contains exactly amount elements, or more than min and less than max elements if provided. The field can be relative or absolute.
+ * @param {string} field The column name
+ * @param {string | number | undefined | null | Date | boolean} target The options for this rule
+ * @throws Throws an error if the field doesn't exist in the table or if the constraint is malformed
+ * @returns {Rule} The created rule
+ **/
+function isEqual (field, target) {
+  if (!field || !(Object(field) instanceof String)) throw new Error('`isEqual` rule expects its first parameter to be a string matching a field or a table. Please refer to the documentation.')
+  if (typeof target === 'object' && !(target instanceof Date)) throw new Error('`isEqual` rule expects its second parameter to be a primitive value or a date to compare to the field.')
+  /**
+   * Check if a result is acceptable according to current access rules
+   * @param {unknown} value The result element to check
+   * @returns {boolean} Is the element acceptable
+   */
+  const isValid = value => (target instanceof Date ? target.getTime() === new Date(/** @type {Date} **/(value)).getTime() : value === target)
+  return ({ tables, tableName }) => async ({ authId, object, request, requestFlag, query }) => {
+    return checkInTable({ field, tables, tableName, authId, object, request, requestFlag, query, ruleName: 'isEqual', isValid })
   }
 }
 
@@ -289,5 +310,6 @@ module.exports = {
   is,
   all,
   request,
+  isEqual,
   none
 }

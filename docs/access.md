@@ -128,6 +128,32 @@ const rules = {
   }
 ```
 
+### isEqual(field, target)
+
+The count rule ensure that the elements of the `field` array property match the target.
+
+Target can be any primitive: a **Date**, a **string**, a **number**, a **boolean**, **null**, **undefined**
+
+Those 3 parameters are optional, but there must at least be one parameter provided, and you cannot provide `min` nor `max` if `amount` is provided.
+
+**Example**
+
+```javascript
+const { none, count, member, and } = require('simple-ql');
+const rules = {
+  Feed : {
+    participants: {
+      add : none,           //Once the feed is created, no one can add participants
+      remove : none,        //Once the feed is created, no one can remove participants
+    },
+    delete : none,          //No one can delete a feed
+    create : and(
+      member('participants'), //Users always need to be a member of the feed they wish to create
+      count('participants', { amount: 2 }) //When creating a Feed, the amount of participants must equal 2
+    ),
+  }
+```
+
 ## Creating your own rule
 
 Of course, you will probably need to configure some custom rules that cannot be expressed with the rules we are currently providing. In this case, you can create your own rule.

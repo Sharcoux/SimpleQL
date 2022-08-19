@@ -85,8 +85,8 @@ function isString (key, value, table) {
 async function createJWT (id, jwtConfig) {
   return new Promise((resolve, reject) => {
     jwt.sign({ id: id + '' }, privateKey, jwtConfig, (err, token) => {
-      if (err) reject(err)
-      resolve(token)
+      if (err || !token) reject(err || 'token is undefined')
+      else resolve(token)
     })
   })
 }
@@ -101,7 +101,7 @@ async function checkJWT (token, jwtConfig) {
   return new Promise((resolve, reject) => {
     jwt.verify(token, publicKey, jwtConfig, (err, decoded) => {
       if (err) reject(err)
-      resolve(decoded)
+      else resolve(decoded)
     })
   })
 }
@@ -116,7 +116,7 @@ async function createHash (password, salt) {
   return new Promise((resolve, reject) => {
     crypto.pbkdf2(password, salt || '', 1000, 64, 'sha512', (err, hash) => {
       if (err) reject(err)
-      resolve(hash)
+      else resolve(hash)
     })
   })
 }
@@ -210,7 +210,7 @@ function createLoginPlugin (config) {
       } catch (err) {
         return Promise.reject(err)
       }
-      if (!table.index.find(elt => elt.column === login && elt.type === 'unique')) return Promise.reject(`${login} should be made a unique index in table ${userTable}. add a field index:['${login}/unique'] inside ${userTable}.`)
+      if (!table.index || !table.index.find(elt => elt.column === login && elt.type === 'unique')) return Promise.reject(`${login} should be made a unique index in table ${userTable}. add a field index:['${login}/unique'] inside ${userTable}.`)
     },
     onRequest: {
       [userTable]: async (request, { query, local, isAdmin }) => {
