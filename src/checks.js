@@ -17,6 +17,7 @@ function checkTables (tables) {
   const indexTypes = ['unique', 'fulltext', 'spatial']
   // check values
   Object.keys(tables).forEach(tableName => {
+    if (['Group', 'Usage'].includes(tableName)) throw new Error(`${tableName} is a restricted name. You can\'t use it for you table`)
     const table = tables[tableName]
     Object.keys(table).forEach(field => {
       if (reservedKeys.includes(field) && field !== 'index' && field !== 'notNull') throw new Error(`${field} is a reserved field`)
@@ -132,6 +133,7 @@ function checkTables (tables) {
       value.forEach(column => {
         if (!tables[tableName][column] && column !== 'index' && column !== 'notNull') throw new Error(`Column ${column} was referenced inside of field 'notNull' in table ${tableName} but it doen't exist in that table.`)
         if (/** @type {import('./utils').Column} */(tables[tableName][column]).notNull === false) throw new Error(`Column ${column} in table ${tableName} is marked both as nullable and notNull.`)
+        if (Array.isArray(tables[tableName][column])) throw new Error(`Column ${column} in table ${tableName} is marked as not null but is an associative array.`)
       })
     }
 
