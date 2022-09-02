@@ -9,7 +9,6 @@ const createRequestHandler = require('../requestHandler')
 const log = require('../utils/logger')
 const plugin = require('../drivers/stripe/plugin')
 const { getQuery, dbQuery } = require('../utils/query')
-const customerKeys = ['email', 'name', 'description', 'metadata']
 
 /** @type {Promise<import('../utils').Result>} */
 let stripeQueryStack = Promise.resolve({})
@@ -71,10 +70,37 @@ async function updateStripeIpList () {
  */
 
 /**
+ * @typedef {Object} StripeCustomerAddress
+ * @property {string=} city
+ * @property {string=} country
+ * @property {string=} line1
+ * @property {string=} line2
+ * @property {string=} state
+ * @property {string=} postal_code
+ */
+
+/**
+ * @typedef {Object} StripeCustomer
+ * @property {string=} email
+ * @property {string=} name
+ * @property {string=} description
+ * @property {StripeCustomerAddress=} address
+ * @property {string=} phone
+ * @property {Object.<string, string>=} metadata
+ */
+
+/**
+ * @callback ElementParser
+ * @param {import('../utils').Element} element The database element
+ * @returns {StripeCustomer}
+ */
+
+/**
  * @typedef {Object} StripePluginConfig
  * @property {string} adminKey The id of admin user (this is the privateKey provided to the database. See [Database](../../docs/database.md))
  * @property {string} secretKey The Stripe secretKey
  * @property {string} customerTable The table where the users will be stored in the SimpleQL database
+ * @property {ElementParser} toStripeFormat A function responsible to format a database Element to the stripe Customer format
  * @property {string} webhookURL The URL were the Stripe webhooks should be sent
  * @property {string=} proxyWebhookPath If using a proxy, the path the express app should actually be listening too
  * @property {string=} webhookSecret The secret key provided by stripe for [testing webhooks locally](https://stripe.com/docs/webhooks/test)
@@ -95,7 +121,7 @@ async function createStripePlugin (app, config) {
 
   const {
     secretKey, customerTable = 'User', webhookURL = 'stripe-webhooks', listeners = {},
-    database, webhookSecret, adminKey, proxyWebhookPath
+    database, webhookSecret, adminKey, proxyWebhookPath, toStripeFormat
   } = config
   stripe = getOptionalDep('stripe', 'StripePlugin')(secretKey)
 
@@ -186,7 +212,7 @@ async function createStripePlugin (app, config) {
       [customerTable]: async ({ objects, newValues }, { local }) => {
         local.stripeUpdated = objects.map(object => {
           // filter the updated fields with the customerKeys
-          const toUpdate = filterObject(newValues, customerKeys)
+          const toUpdate = toStripeFormat(newValues)
           return { object, toUpdate }
         })
       }
@@ -205,7 +231,7 @@ async function createStripePlugin (app, config) {
       if (local.stripeCreated) {
         await Promise.all(local.stripeCreated.map(async created => {
         // Create the user in Stripe database and update the local database
-          const stripeCustomer = filterObject(created, customerKeys)
+          const stripeCustomer = toStripeFormat(created)
           // TODO : Check if a user already exists in stripe with this email?
           const { id: stripeId } = await stripe.customers.create(stripeCustomer)
           await query({ [customerTable]: { reservedId: created.reservedId, set: { stripeId } } }, { admin: true, readOnly: false })

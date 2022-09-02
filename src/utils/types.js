@@ -82,6 +82,7 @@ const stripe = {
   adminKey: 'string',
   secretKey: 'string',
   customerTable: 'string',
+  toStripeFormat: 'function',
   webhookURL: 'string',
   proxyWebhookPath: 'string',
   webhookSecret: 'string',
