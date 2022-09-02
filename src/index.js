@@ -14,6 +14,7 @@ const createRequestHandler = require('./requestHandler')
 const { dbQuery, getQuery } = require('./utils/query')
 
 /** @typedef {import('./plugins').Plugin} Plugin */
+/** @typedef {import('./plugins').stripePlugin.StripePluginConfig} StripePluginConfig */
 /** @typedef {Plugin[]} Plugins */
 /** @typedef {import('./accessControl').Rules} Rules */
 /** @typedef {import('./utils').TableDeclaration} Table */
