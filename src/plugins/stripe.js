@@ -121,7 +121,7 @@ async function createStripePlugin (app, config) {
 
   const {
     secretKey, customerTable = 'User', webhookURL = 'stripe-webhooks', listeners = {},
-    database, webhookSecret, adminKey, proxyWebhookPath, toStripeFormat
+    database, webhookSecret, adminKey, proxyWebhookPath, toStripeFormat = data => ({ email: data.email })
   } = config
   stripe = getOptionalDep('stripe', 'StripePlugin')(secretKey)
 

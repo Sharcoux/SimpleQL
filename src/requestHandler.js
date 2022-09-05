@@ -690,6 +690,8 @@ class TableResolver {
         await sequence(Object.keys(this.table).map(key => async () => {
           // Data not requested
           if (!result[key]) return await Promise.resolve()
+          // If the reservedId is provided in the request, we consider it's access as free
+          if (key === 'reservedId' && this.request[key] && result[key]) return await Promise.resolve()
           // Check property specific rules
           try {
             if (ruleSet[key] && ruleSet[key].read) return await ruleSet[key].read(ruleData)
@@ -781,7 +783,7 @@ class TableResolver {
     }))
     // We return only the results where access was not fully denied
     // WARNING: Using Object.values here would not work because value can be null
-    return results.filter(result => Object.keys(result).find(key => result[key] !== 'Access denied'))
+    return results.filter(result => Object.keys(result).length)
   }
 
   /**
