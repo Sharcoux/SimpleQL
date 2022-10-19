@@ -686,7 +686,10 @@ class TableResolver {
       // Read access
       // Check table level rules
       if (ruleSet.read) {
-        const err = await ruleSet.read(ruleData).catch(err => err)
+        const err = await ruleSet.read(ruleData).catch(err => err || {
+          name: UNAUTHORIZED,
+          message: `User ${this.local.authId} is not allowed to read table ${this.tableName}`
+        })
         await sequence(Object.keys(this.table).map(key => async () => {
           // Data not requested
           if (!result[key]) return await Promise.resolve()
@@ -707,7 +710,10 @@ class TableResolver {
 
       // Write access
       if (ruleSet.write) {
-        const err = await ruleSet.write(ruleData).catch(err => err)
+        const err = await ruleSet.write(ruleData).catch(err => err || {
+          name: UNAUTHORIZED,
+          message: `User ${this.local.authId} is not allowed to write in table ${this.tableName}`
+        })
         // Manage set instructions
         if (this.request.set) {
           const { primitives: setPrimitives, objects: setObjects } = classifyRequestData(this.request.set, this.table)
