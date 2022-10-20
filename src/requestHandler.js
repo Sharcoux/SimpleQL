@@ -894,16 +894,17 @@ class RequestChecker {
    * @returns {boolean} True if the value is
    */
   isTypeCorrect (key, value, model) {
-    const type = model[key].type // The column type
+    const column = model[key]
+    const type = column.type // The column type
     if (value === undefined || value === null) return !model[key].notNull
     switch (type) {
       case 'string':
       case 'varchar':
       case 'time':
       case 'text':
-        return Object(value) instanceof String
+        return (Object(value) instanceof String) && (column.length !== undefined ? value.length <= column.length : true)
       case 'char':
-        return (Object(value) instanceof String) && value.length === 1
+        return (Object(value) instanceof String) && (column.length !== undefined ? value.length <= column.length : true)
       case 'integer':
       case 'year':
         return Number.isInteger(value)
