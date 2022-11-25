@@ -58,7 +58,7 @@ function prepareTables (tables) {
       // Parse the short string data type
       if (typeof data === 'string') {
         const [type, length] = data.split('/')
-        acc[tableName][key] = { type: /** @type {import('./utils').Column['type']} **/(type), length: parseInt(length, 10) }
+        acc[tableName][key] = { type: /** @type {import('./utils').Column['type']} **/(type), length: length !== undefined ? parseInt(length, 10) : undefined }
         table[key] = acc[tableName][key]// We update the table declaration
       } else {
         acc[tableName][key] = data
