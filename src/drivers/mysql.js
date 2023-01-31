@@ -170,7 +170,7 @@ class MysqlDriver extends Driver {
       ) VALUES (
         ${Object.keys(element).map(k => {
           // Handle UUID default value
-          if (this.uuid.includes(table + '.' + k)) element[k] = uuidv4()
+          if (this.uuid.includes(table + '.' + k) && !element[k]) element[k] = uuidv4()
           return this._escapeValue(table, k, element[k])
         }).join(', ')}
       )`
