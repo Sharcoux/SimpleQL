@@ -17,7 +17,23 @@ let stripeQueryStack = Promise.resolve({})
 let stripe
 
 // Update the list of trustable ip everyday
-let validIPs = []
+let validIPs = [
+  '3.18.12.63',
+  '3.130.192.231',
+  '13.235.14.237',
+  '13.235.122.149',
+  '18.211.135.69',
+  '35.154.171.200',
+  '52.15.183.38',
+  '54.88.130.119',
+  '54.88.130.237',
+  '54.187.174.169',
+  '54.187.205.235',
+  '54.187.216.72',
+  '127.0.0.1',
+  '::1',
+  '::ffff:127.0.0.1'
+]
 let updatingInterval = null
 
 /**
@@ -35,12 +51,13 @@ async function updateStripeIpList () {
       })
 
       res.on('end', () => {
+        if (res.statusCode && res.statusCode >= 400) throw new Error(res.statusMessage + '\n' + body)
         try {
           const json = JSON.parse(body)
           if (!json.WEBHOOKS) throw new Error(`Wrong file format for Stripe Ips: ${body}`)
           validIPs = [...json.WEBHOOKS, '127.0.0.1', '::1', '::ffff:127.0.0.1']
           log('info', 'Stripe IPs list updated')
-          resolve()
+          resolve(validIPs)
           // do something with JSON
         } catch (error) {
           reject(`Error when retrieving Stripe IPs: ${error.message}`)
