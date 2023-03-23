@@ -51,7 +51,7 @@ async function updateStripeIpList () {
       })
 
       res.on('end', () => {
-        if (res.statusCode && res.statusCode >= 400) throw new Error(res.statusMessage + '\n' + body)
+        if (res.statusCode && res.statusCode >= 400) return reject(new Error(res.statusMessage + '\n' + body))
         try {
           const json = JSON.parse(body)
           if (!json.WEBHOOKS) throw new Error(`Wrong file format for Stripe Ips: ${body}`)
