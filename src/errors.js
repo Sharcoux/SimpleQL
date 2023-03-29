@@ -1,4 +1,4 @@
-const errors = {
+const errors = /** @type {const} **/({
   REQUIRED: 'REQUIRED',
   NOT_SETTABLE: 'NOT_SETTABLE',
   NOT_UNIQUE: 'NOT_UNIQUE',
@@ -13,7 +13,7 @@ const errors = {
   WRONG_VALUE: 'WRONG_VALUE',
   CONFLICT: 'CONFLICT',
   TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS'
-}
+})
 
 /**
  * @typedef {Object} Error

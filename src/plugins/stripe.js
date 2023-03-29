@@ -181,7 +181,7 @@ async function createStripePlugin (app, config) {
   let normalTableNames = []
   const stripeTableNames = Object.keys(tables)
   return {
-    preRequisite: (tables) => {
+    preRequisite: async (tables) => {
       normalTableNames = Object.keys(tables)
       const duplicateTable = normalTableNames.find(name => stripeTableNames.includes(name))
       if (duplicateTable) return Promise.reject(`Table ${duplicateTable} is a Stripe table. You must rename it to prevent conflicts.`)
@@ -189,7 +189,7 @@ async function createStripePlugin (app, config) {
       const customerStripeId = /** @type {import('../utils').Column} */(tables[customerTable].stripeId)
       if (!customerStripeId) return Promise.reject(`To use the Stripe plugin, you need a column to store the stripeId of your customers in your table ${customerTable}. The column 'stripeId' needs to be defined in your table ${customerTable}.`)
       if (customerStripeId.type !== 'string') return Promise.reject(`To use the Stripe plugin, you need a column 'stripeId' of type string in ${customerTable}, but it is of type ${customerStripeId.type}.`)
-      if (customerStripeId.length < 40) return Promise.reject(`To use the Stripe plugin, you need a column 'stripeId' of length at least 40, but you specified ${customerStripeId.length}.`)
+      if (customerStripeId.length && customerStripeId.length < 40) return Promise.reject(`To use the Stripe plugin, you need a column 'stripeId' of length at least 40, but you specified ${customerStripeId.length}.`)
     },
     middleware: async (req, res, next) => {
       // We need to split the part of the request relative to Stripe from the rest
