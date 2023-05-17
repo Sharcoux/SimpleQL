@@ -123,7 +123,9 @@ function helperGetter (stripe) {
       create: element => stripe[tableToTableProp[table]].create(element),
       delete: element => stripe[tableToTableProp[table]].del(element.id),
       update: (element, values) => stripe[tableToTableProp[table]].update(element.id, values),
-      list: async (params, search) => (await stripe[tableToTableProp[table]].list(buildParameter(table, search, false, params))).data,
+      // the default limit for list is usually 10
+      // TODO: if there are more than 100 items some of them won't be listed, fix this issue.
+      list: async (params, search) => (await stripe[tableToTableProp[table]].list({ ...buildParameter(table, search, false, params), limit: 100 })).data,
       retrieve: (element, search) => stripe[tableToTableProp[table]].retrieve(element.id, buildParameter(table, search, true))
     }
   }
