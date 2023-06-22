@@ -974,8 +974,8 @@ class RequestChecker {
       if (this.request.create) {
         const wrongTypeKey = this.wrongType(this.primitives, this.request, this.tablesModel[this.tableName])
         if (wrongTypeKey) throw new Error(`The value ${stringify(this.request[wrongTypeKey])} for ${wrongTypeKey} in table ${this.tableName} is of type ${toType(this.request[wrongTypeKey])} but it was expected to be of type ${this.tablesModel[this.tableName][wrongTypeKey].type}. The request was : ${stringify(this.request)}.`)
-        const wrongLengthKey = this.wrongLength(setPrimitives, this.request.set, this.tablesModel[this.tableName])
-        if (wrongLengthKey) throw new Error(`The value ${stringify(this.request.set[wrongLengthKey])} for ${wrongLengthKey} in table ${this.tableName} is of length ${this.request.set[wrongLengthKey].length} but it was expected to be of max ${this.tablesModel[this.tableName][wrongLengthKey].length}. The request was : ${stringify(this.request)}.`)
+        const wrongLengthKey = this.wrongLength(this.primitives, this.request, this.tablesModel[this.tableName])
+        if (wrongLengthKey) throw new Error(`The value ${stringify(this.request[wrongLengthKey])} for ${wrongLengthKey} in table ${this.tableName} is of length ${this.request[wrongLengthKey].length} but it was expected to be of max ${this.tablesModel[this.tableName][wrongLengthKey].length}. The request was : ${stringify(this.request)}.`)
       }
       // Check that there is not add or remove instruction in object fields
       const unwantedInstruction = this.objects.find(key => this.request[key].add || this.request[key].remove)
