@@ -838,6 +838,7 @@ class RequestChecker {
     this.isTypeCorrect = this.isTypeCorrect.bind(this)
     this.checkEntry = this.checkEntry.bind(this)
     this.wrongType = this.wrongType.bind(this)
+    this.wrongLength = this.wrongLength.bind(this)
     this.check = this.check.bind(this)
   }
 
@@ -902,9 +903,9 @@ class RequestChecker {
       case 'varchar':
       case 'time':
       case 'text':
-        return (Object(value) instanceof String) && (column.length !== undefined ? value.length <= column.length : true)
+        return Object(value) instanceof String
       case 'char':
-        return (Object(value) instanceof String) && (column.length !== undefined ? value.length <= column.length : true)
+        return Object(value) instanceof String
       case 'integer':
       case 'year':
         return Number.isInteger(value)
@@ -932,10 +933,26 @@ class RequestChecker {
    * @param {string[]} keys The keys to check
    * @param {Object.<string, any>} values The values associated to those keys
    * @param {import('./utils').Table} model The data model where we can check the expected type
-   * @returns {string} True if the value is
+   * @returns {string | undefined} the key that is of wrong type if any
    */
   wrongType (keys, values, model) {
     return keys.find(key => !this.isTypeCorrect(key, values[key], model))
+  }
+
+  /**
+   * Ensure that the types of each value are matching the column type
+   * @param {string[]} keys The keys to check
+   * @param {Object.<string, any>} values The values associated to those keys
+   * @param {import('./utils').Table} model The data model where we can check the expected type
+   * @returns {string | undefined} the key that is of wrong length
+   */
+  wrongLength (keys, values, model) {
+    return keys.find(key => {
+      const column = model[key]
+      const value = values[key]
+      // We refuse only char or text strings when the column has a length constraint and the value is longer than that
+      return (['text', 'char'].includes(column.type) && column.length !== undefined && value.length > column.length)
+    })
   }
 
   check () {
@@ -948,13 +965,17 @@ class RequestChecker {
         if (Array.isArray(this.request.set) || !(this.request instanceof Object)) throw new Error(`The 'set' instruction ${stringify(this.request.set)} provided in table ${this.tableName} is not a plain object. A plain object is required for 'set' instructions. The request was : ${stringify(this.request)}.`)
         const { primitives: setPrimitives, objects: setObjects, arrays: setArrays } = classifyRequestData(this.request.set, this.table)
         this.checkEntry(this.request.set, setPrimitives, setObjects, setArrays)
-        const wrongKey = this.wrongType(setPrimitives, this.request.set, this.tablesModel[this.tableName])
-        if (wrongKey) throw new Error(`The value ${stringify(this.request.set[wrongKey])} for ${wrongKey} in table ${this.tableName} is of type ${toType(this.request.set[wrongKey])} but it was expected to be of type ${this.tablesModel[this.tableName][wrongKey].type}. The request was : ${stringify(this.request)}.`)
+        const wrongTypeKey = this.wrongType(setPrimitives, this.request.set, this.tablesModel[this.tableName])
+        if (wrongTypeKey) throw new Error(`The value ${stringify(this.request.set[wrongTypeKey])} for ${wrongTypeKey} in table ${this.tableName} is of type ${toType(this.request.set[wrongTypeKey])} but it was expected to be of type ${this.tablesModel[this.tableName][wrongTypeKey].type}. The request was : ${stringify(this.request)}.`)
+        const wrongLengthKey = this.wrongLength(setPrimitives, this.request.set, this.tablesModel[this.tableName])
+        if (wrongLengthKey) throw new Error(`The value ${stringify(this.request.set[wrongLengthKey])} for ${wrongLengthKey} in table ${this.tableName} is of length ${this.request.set[wrongLengthKey].length} but it was expected to be of max ${this.tablesModel[this.tableName][wrongLengthKey].length}. The request was : ${stringify(this.request)}.`)
       }
       // Check that create instruction is acceptable
       if (this.request.create) {
-        const wrongKey = this.wrongType(this.primitives, this.request, this.tablesModel[this.tableName])
-        if (wrongKey) throw new Error(`The value ${stringify(this.request[wrongKey])} for ${wrongKey} in table ${this.tableName} is of type ${toType(this.request[wrongKey])} but it was expected to be of type ${this.tablesModel[this.tableName][wrongKey].type}. The request was : ${stringify(this.request)}.`)
+        const wrongTypeKey = this.wrongType(this.primitives, this.request, this.tablesModel[this.tableName])
+        if (wrongTypeKey) throw new Error(`The value ${stringify(this.request[wrongTypeKey])} for ${wrongTypeKey} in table ${this.tableName} is of type ${toType(this.request[wrongTypeKey])} but it was expected to be of type ${this.tablesModel[this.tableName][wrongTypeKey].type}. The request was : ${stringify(this.request)}.`)
+        const wrongLengthKey = this.wrongLength(setPrimitives, this.request.set, this.tablesModel[this.tableName])
+        if (wrongLengthKey) throw new Error(`The value ${stringify(this.request.set[wrongLengthKey])} for ${wrongLengthKey} in table ${this.tableName} is of length ${this.request.set[wrongLengthKey].length} but it was expected to be of max ${this.tablesModel[this.tableName][wrongLengthKey].length}. The request was : ${stringify(this.request)}.`)
       }
       // Check that there is not add or remove instruction in object fields
       const unwantedInstruction = this.objects.find(key => this.request[key].add || this.request[key].remove)
