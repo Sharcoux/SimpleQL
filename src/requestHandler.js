@@ -2,7 +2,7 @@
 
 /** This is the core of SimpleQL where every request is cut in pieces and transformed into a query to the database */
 const { isPrimitive, toType, classifyRequestData, operators, sequence, stringify, filterObject, formatRequest } = require('./utils')
-const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, WRONG_VALUE } = require('./errors')
+const { NOT_SETTABLE, NOT_UNIQUE, NOT_FOUND, BAD_REQUEST, UNAUTHORIZED, ACCESS_DENIED, WRONG_VALUE, PAYLOAD_TOO_LARGE } = require('./errors')
 const log = require('./utils/logger')
 const Cache = require('./utils/cache')
 
@@ -951,7 +951,7 @@ class RequestChecker {
       const column = model[key]
       const value = values[key]
       // We refuse only char or text strings when the column has a length constraint and the value is longer than that
-      return (['text', 'char'].includes(column.type) && column.length !== undefined && value.length > column.length)
+      return (['string', 'varchar', 'time', 'text', 'char'].includes(column.type) && column.length !== undefined && value.length > column.length)
     })
   }
 
@@ -966,16 +966,16 @@ class RequestChecker {
         const { primitives: setPrimitives, objects: setObjects, arrays: setArrays } = classifyRequestData(this.request.set, this.table)
         this.checkEntry(this.request.set, setPrimitives, setObjects, setArrays)
         const wrongTypeKey = this.wrongType(setPrimitives, this.request.set, this.tablesModel[this.tableName])
-        if (wrongTypeKey) throw new Error(`The value ${stringify(this.request.set[wrongTypeKey])} for ${wrongTypeKey} in table ${this.tableName} is of type ${toType(this.request.set[wrongTypeKey])} but it was expected to be of type ${this.tablesModel[this.tableName][wrongTypeKey].type}. The request was : ${stringify(this.request)}.`)
+        if (wrongTypeKey) throw new Error(`WRONG TYPE: The value ${stringify(this.request.set[wrongTypeKey])} for ${wrongTypeKey} in table ${this.tableName} is of type ${toType(this.request.set[wrongTypeKey])} but it was expected to be of type ${this.tablesModel[this.tableName][wrongTypeKey].type}. The request was : ${stringify(this.request)}.`)
         const wrongLengthKey = this.wrongLength(setPrimitives, this.request.set, this.tablesModel[this.tableName])
-        if (wrongLengthKey) throw new Error(`The value ${stringify(this.request.set[wrongLengthKey])} for ${wrongLengthKey} in table ${this.tableName} is of length ${this.request.set[wrongLengthKey].length} but it was expected to be of max ${this.tablesModel[this.tableName][wrongLengthKey].length}. The request was : ${stringify(this.request)}.`)
+        if (wrongLengthKey) throw new Error(`WRONG LENGTH: The value ${stringify(this.request.set[wrongLengthKey])} for ${wrongLengthKey} in table ${this.tableName} is of length ${this.request.set[wrongLengthKey].length} but it was expected to be of max ${this.tablesModel[this.tableName][wrongLengthKey].length}. The request was : ${stringify(this.request)}.`)
       }
       // Check that create instruction is acceptable
       if (this.request.create) {
         const wrongTypeKey = this.wrongType(this.primitives, this.request, this.tablesModel[this.tableName])
-        if (wrongTypeKey) throw new Error(`The value ${stringify(this.request[wrongTypeKey])} for ${wrongTypeKey} in table ${this.tableName} is of type ${toType(this.request[wrongTypeKey])} but it was expected to be of type ${this.tablesModel[this.tableName][wrongTypeKey].type}. The request was : ${stringify(this.request)}.`)
+        if (wrongTypeKey) throw new Error(`WRONG TYPE: The value ${stringify(this.request[wrongTypeKey])} for ${wrongTypeKey} in table ${this.tableName} is of type ${toType(this.request[wrongTypeKey])} but it was expected to be of type ${this.tablesModel[this.tableName][wrongTypeKey].type}. The request was : ${stringify(this.request)}.`)
         const wrongLengthKey = this.wrongLength(this.primitives, this.request, this.tablesModel[this.tableName])
-        if (wrongLengthKey) throw new Error(`The value ${stringify(this.request[wrongLengthKey])} for ${wrongLengthKey} in table ${this.tableName} is of length ${this.request[wrongLengthKey].length} but it was expected to be of max ${this.tablesModel[this.tableName][wrongLengthKey].length}. The request was : ${stringify(this.request)}.`)
+        if (wrongLengthKey) throw new Error(`WRONG LENGTH: The value ${stringify(this.request[wrongLengthKey])} for ${wrongLengthKey} in table ${this.tableName} is of length ${this.request[wrongLengthKey].length} but it was expected to be of max ${this.tablesModel[this.tableName][wrongLengthKey].length}. The request was : ${stringify(this.request)}.`)
       }
       // Check that there is not add or remove instruction in object fields
       const unwantedInstruction = this.objects.find(key => this.request[key].add || this.request[key].remove)
@@ -1003,7 +1003,8 @@ class RequestChecker {
       }
       return Promise.resolve()
     } catch (err) {
-      return Promise.reject({ name: BAD_REQUEST, message: err.message })
+      if (err.message.startsWith('WRONG LENGTH')) return Promise.reject({ name: PAYLOAD_TOO_LARGE, message: err.message })
+      else return Promise.reject({ name: BAD_REQUEST, message: err.message })
     }
   }
 }
