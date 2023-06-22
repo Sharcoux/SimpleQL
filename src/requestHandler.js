@@ -951,7 +951,7 @@ class RequestChecker {
       const column = model[key]
       const value = values[key]
       // We refuse only char or text strings when the column has a length constraint and the value is longer than that
-      return (['string', 'varchar', 'time', 'text', 'char'].includes(column.type) && column.length !== undefined && value.length > column.length)
+      return (['string', 'varchar', 'time', 'text', 'char'].includes(column.type) && column.length !== undefined && value && value.length > column.length)
     })
   }
 
